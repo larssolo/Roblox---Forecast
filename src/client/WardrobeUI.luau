@@ -619,9 +619,12 @@ function WardrobeUI.create(ctx: any)
 			LayoutOrder = order,
 		}, gridScroll) :: TextButton
 		theme.corner(card, 14)
-		theme.stroke(card, if equipped then theme.PinkHot else theme.rarityColor(def.rarity), 2.5, if equipped
-			then 0
-			else 0.2)
+		theme.stroke(
+			card,
+			if equipped then theme.PinkHot else theme.rarityColor(def.rarity),
+			2.5,
+			if equipped then 0 else 0.2
+		)
 
 		local icon = theme.label(def.icon, {
 			TextScaled = false,

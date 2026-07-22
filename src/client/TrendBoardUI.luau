@@ -397,9 +397,7 @@ function TrendBoardUI.createBrief(ctx: any)
 					child:Destroy()
 				end
 			end
-			local tags = if type(p.themeTags) == "table"
-				then p.themeTags
-				else Config.ThemeTags[themeName] or {}
+			local tags = if type(p.themeTags) == "table" then p.themeTags else Config.ThemeTags[themeName] or {}
 			for order, tag in ipairs(tags) do
 				local chip = theme.chip("#" .. tostring(tag), theme.Gold, tagsRow)
 				chip.LayoutOrder = order

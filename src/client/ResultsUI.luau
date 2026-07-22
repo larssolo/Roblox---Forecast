@@ -542,11 +542,9 @@ local function buildImpact(parent: Instance, impacts: { any })
 		local frac = math.clamp(imp.gained / maxGain, 0, 1)
 		task.delay(0.4 + i * 0.08, function()
 			if bar.Parent then
-				TweenService
-					:Create(bar, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-						Size = UDim2.new(frac, 0, 1, 0),
-					})
-					:Play()
+				TweenService:Create(bar, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+					Size = UDim2.new(frac, 0, 1, 0),
+				}):Play()
 			end
 		end)
 	end

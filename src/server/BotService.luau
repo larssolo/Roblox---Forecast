@@ -33,13 +33,16 @@ local function ensureRoster(count: number)
 	while #roster < count do
 		local index = #roster + 1
 		local name = Config.Bots.Names[index] or `Styler{index}`
-		table.insert(roster, {
-			Name = name,
-			DisplayName = name,
-			UserId = -(1000 + index),
-			Parent = nil,
-			__bot = true :: any,
-		} :: BotEntrant)
+		table.insert(
+			roster,
+			{
+				Name = name,
+				DisplayName = name,
+				UserId = -(1000 + index),
+				Parent = nil,
+				__bot = true :: any,
+			} :: BotEntrant
+		)
 	end
 end
 

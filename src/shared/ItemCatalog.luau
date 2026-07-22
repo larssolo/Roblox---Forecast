@@ -9,7 +9,14 @@ local Types = require(script.Parent.Types)
 type ItemDef = Types.ItemDef
 type Outfit = Types.Outfit
 
-local function item(id: string, name: string, slot: Types.ItemSlot, tags: { string }, colorable: boolean, icon: string): ItemDef
+local function item(
+	id: string,
+	name: string,
+	slot: Types.ItemSlot,
+	tags: { string },
+	colorable: boolean,
+	icon: string
+): ItemDef
 	return {
 		id = id,
 		name = name,

@@ -42,8 +42,7 @@ function UIFX.shake(inst: GuiObject, intensity: number?, duration: number?)
 		local elapsed = 0
 		while elapsed < dur do
 			local decay = 1 - elapsed / dur
-			inst.Position = origin
-				+ UDim2.fromOffset(math.random(-amp, amp) * decay, math.random(-amp, amp) * decay)
+			inst.Position = origin + UDim2.fromOffset(math.random(-amp, amp) * decay, math.random(-amp, amp) * decay)
 			elapsed += task.wait(0.03)
 		end
 		inst.Position = origin
@@ -80,14 +79,10 @@ function UIFX.confetti(parent: Instance, count: number?)
 			piece.Rotation = math.random(0, 180)
 			piece.ZIndex = 40
 			piece.Parent = parent
-			local fall = TweenService:Create(
-				piece,
-				TweenInfo.new(1.4 + math.random() * 1.2, Enum.EasingStyle.Linear),
-				{
-					Position = UDim2.new(piece.Position.X.Scale + (math.random() - 0.5) * 0.2, 0, 1.08, 0),
-					Rotation = piece.Rotation + math.random(120, 420),
-				}
-			)
+			local fall = TweenService:Create(piece, TweenInfo.new(1.4 + math.random() * 1.2, Enum.EasingStyle.Linear), {
+				Position = UDim2.new(piece.Position.X.Scale + (math.random() - 0.5) * 0.2, 0, 1.08, 0),
+				Rotation = piece.Rotation + math.random(120, 420),
+			})
 			fall.Completed:Connect(function()
 				piece:Destroy()
 			end)
@@ -181,11 +176,9 @@ function UIFX.slideIn(inst: GuiObject, fromDirection: string, duration: number?)
 		bottom = UDim2.fromScale(0, 0.4),
 	}
 	inst.Position = target + (offset[fromDirection] or offset.bottom)
-	TweenService
-		:Create(inst, TweenInfo.new(duration or 0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-			Position = target,
-		})
-		:Play()
+	TweenService:Create(inst, TweenInfo.new(duration or 0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+		Position = target,
+	}):Play()
 end
 
 return UIFX

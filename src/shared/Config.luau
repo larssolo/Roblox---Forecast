@@ -29,7 +29,16 @@ Config.Bots = {
 	BetChance = 0.8, -- chance a bot places a trend bet
 	ReactChance = 0.25, -- chance per bot per look of an emote reaction
 	VoteNoise = 1, -- ± stars of personal taste
-	Names = { "NovaStyle", "PixiePop", "VelvetVibe", "MochiMuse", "GlitterGlow", "EchoChic", "PeachyKeen", "SableStorm" },
+	Names = {
+		"NovaStyle",
+		"PixiePop",
+		"VelvetVibe",
+		"MochiMuse",
+		"GlitterGlow",
+		"EchoChic",
+		"PeachyKeen",
+		"SableStorm",
+	},
 }
 
 -- Anonymous runway reactions (spec §3 "React"). Server echoes only these glyphs.

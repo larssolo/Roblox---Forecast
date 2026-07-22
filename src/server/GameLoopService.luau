@@ -108,7 +108,9 @@ end
 
 -- Runway card payload: icon + color data lets the client render styled cards
 -- while avatars remain a TODO (spec §9.8).
-local function outfitSummary(outfit: Outfit): { { slot: string, item: string, icon: string, color: string?, colorBucket: number? } }
+local function outfitSummary(
+	outfit: Outfit
+): { { slot: string, item: string, icon: string, color: string?, colorBucket: number? } }
 	local summary = {}
 	for slotName in BASE_SLOT do
 		local piece = outfit[slotName]
