@@ -4,17 +4,18 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TrendMath = require(ReplicatedStorage.Shared.TrendMath)
+local Types = require(ReplicatedStorage.Shared.Types)
 
 local VotingService = {}
 
-type Votes = { [Player]: { [string]: number } } -- voter -> lookId -> stars
+type Votes = { [Types.Entrant]: { [string]: number } } -- voter -> lookId -> stars
 
 local active = false
 local currentLookId: string? = nil
-local owners: { [string]: Player } = {} -- lookId -> owner
+local owners: { [string]: Types.Entrant } = {} -- lookId -> owner
 local votes: Votes = {}
 
-function VotingService.startRound(lookOwners: { [string]: Player })
+function VotingService.startRound(lookOwners: { [string]: Types.Entrant })
 	active = true
 	currentLookId = nil
 	owners = lookOwners
@@ -26,7 +27,7 @@ function VotingService.openLook(lookId: string)
 end
 
 -- Vote window = the look's runway slot only (spec §3). Returns true if counted.
-function VotingService.castVote(voter: Player, lookId: string, stars: number): boolean
+function VotingService.castVote(voter: Types.Entrant, lookId: string, stars: number): boolean
 	if not active or lookId ~= currentLookId then
 		return false
 	end
@@ -56,7 +57,7 @@ end
 export type FinalizeResult = {
 	rawScores: { [string]: number }, -- lookId -> rawScore (1..5)
 	voteCounts: { [string]: number },
-	votedSet: { [Player]: boolean },
+	votedSet: { [Types.Entrant]: boolean },
 }
 
 --[[
@@ -67,7 +68,7 @@ export type FinalizeResult = {
 function VotingService.finalize(): FinalizeResult
 	local sums: { [string]: number } = {}
 	local counts: { [string]: number } = {}
-	local votedSet: { [Player]: boolean } = {}
+	local votedSet: { [Types.Entrant]: boolean } = {}
 
 	for voter, byLook in votes do
 		local total, n = 0, 0

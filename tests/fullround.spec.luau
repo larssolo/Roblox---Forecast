@@ -75,6 +75,10 @@ Config.Round.ForecastTime = 0.3
 Config.Round.RunwaySecondsPerLook = 0.2
 Config.Round.ResultsTime = 0.25
 Config.Net.Limits.SubmitOutfit = { max = 1, window = 0.3 }
+-- Determinism: this spec asserts exact scores/payouts, so AI stylists stay out
+-- and no theme grants a match bonus (tests/botround.spec.luau covers both).
+Config.Bots.Enabled = false
+Config.ThemeTags = {}
 
 local function waitForState(target, timeout)
 	local deadline = os.clock() + (timeout or 8)

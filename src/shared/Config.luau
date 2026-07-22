@@ -5,7 +5,7 @@
 local Config = {}
 
 Config.Round = {
-	MinPlayers = 1, -- 1 = solo Studio testing; use 2 with Test → Clients and Servers (see README)
+	MinPlayers = 1, -- humans required to start; AI stylists (Config.Bots) fill the rest
 	MaxPlayers = 15,
 	BriefTime = 15,
 	StylingTime = 210,
@@ -13,7 +13,40 @@ Config.Round = {
 	RunwaySecondsPerLook = 8,
 	ResultsTime = 30,
 	MinLooksToRun = 1,
+	-- Dressing for the brief pays: +ThemeMatchPerTag per theme tag worn, capped.
+	ThemeMatchPerTag = 0.06,
+	ThemeMatchCap = 0.12,
 }
+
+-- AI stylists (BotService). They style, bet, vote and react so a solo player —
+-- or a half-empty server — still gets a full, lively round. Bots never count
+-- toward MinPlayers and never earn profiles or rewards.
+Config.Bots = {
+	Enabled = true,
+	FillTo = 6, -- top the round up to this many entrants when humans are short
+	MaxBots = 5,
+	ActSpread = 0.5, -- fraction of a phase over which bot actions are spread (0 = instant, used by tests)
+	BetChance = 0.8, -- chance a bot places a trend bet
+	ReactChance = 0.25, -- chance per bot per look of an emote reaction
+	VoteNoise = 1, -- ± stars of personal taste
+	Names = { "NovaStyle", "PixiePop", "VelvetVibe", "MochiMuse", "GlitterGlow", "EchoChic", "PeachyKeen", "SableStorm" },
+}
+
+-- Anonymous runway reactions (spec §3 "React"). Server echoes only these glyphs.
+Config.Emotes = { "💖", "🔥", "✨", "😱", "💅" }
+
+-- Which style tags each brief rewards (Round.ThemeMatchPerTag) and which the
+-- bots dress toward. Tags must exist in ItemCatalog.styleTags.
+Config.ThemeTags = {
+	["Rainy Day Runway"] = { "cottage", "preppy" },
+	["Y2K Throwback"] = { "y2k", "streetwear" },
+	["Fairycore Forest"] = { "fairycore", "cottage" },
+	["First Day of School"] = { "preppy", "sporty" },
+	["Neon Night Out"] = { "glam", "streetwear" },
+	["Cozy Sunday"] = { "cottage" },
+	["Beach Festival"] = { "sporty", "y2k" },
+	["Winter Wonderland"] = { "glam", "fairycore" },
+} :: { [string]: { string } }
 
 -- Trend Engine constants (spec §4.2–4.4). TrendMath.luau receives these as a table
 -- so the math stays dependency-free and lune-testable.
@@ -41,11 +74,24 @@ Config.Economy = {
 	NonVoterPenalty = 0.9, -- coin multiplier if the player cast zero votes (spec §3)
 	BetRewardThreads = 40,
 	BetRewardXp = 25,
+	OracleStepThreads = 10, -- extra Threads per consecutive bet hit beyond the first…
+	OracleBonusCap = 50, -- …capped here (stats.oracle tracks the streak)
 	XpPerRound = 10,
 	XpWinBonus = 30,
 	XpPerRank = 100,
 	MaxRank = 50,
 	StartingThreads = 100,
+}
+
+-- Display titles by rank (client-side flavor; highest entry ≤ rank wins).
+Config.RankTitles = {
+	{ rank = 1, title = "Trend Newbie" },
+	{ rank = 3, title = "Style Scout" },
+	{ rank = 6, title = "Trend Spotter" },
+	{ rank = 10, title = "It Girl" },
+	{ rank = 16, title = "Style Icon" },
+	{ rank = 25, title = "Trend Oracle" },
+	{ rank = 40, title = "Fashion Legend" },
 }
 
 -- Per-remote rate limits (spec §9.4/§9.7). Enforced server-side in Net + AntiAbuse.
@@ -56,6 +102,7 @@ Config.Net = {
 		SubmitVote = { max = 20, window = 60 },
 		React = { max = 1, window = 3 },
 		GetBootstrap = { max = 3, window = 60 },
+		BuyItem = { max = 8, window = 10 },
 	},
 	GlobalLimit = { max = 30, window = 10 },
 }

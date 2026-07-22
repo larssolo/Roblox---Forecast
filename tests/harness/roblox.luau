@@ -379,6 +379,7 @@ function Harness.new()
 			"TrendEngineService",
 			"VotingService",
 			"BetService",
+			"BotService",
 			"GameLoopService",
 		}
 	do
