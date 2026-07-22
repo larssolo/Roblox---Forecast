@@ -1,8 +1,8 @@
 --!strict
 -- Runway panel: the show itself. ANONYMITY IS LAW (spec §9.8) — the card never
 -- hints at whose look is on stage; every stylist is "Mystery Stylist 🎭". The
--- single exception is payload.yours on YOUR OWN card. Looks are still text
--- cards (graybox — avatars are the README TODO). One vote per look, no
+-- single exception is payload.yours on YOUR OWN card. Each look struts as a
+-- paper doll (DollRenderer) wearing the outfit. One vote per look, no
 -- self-votes; the emote bar shares ONE cooldown because Config.Net.Limits.React
 -- is per-remote, not per-emote, and the client must never trip the limiter.
 
@@ -11,6 +11,7 @@ local TweenService = game:GetService("TweenService")
 
 local Net = require(ReplicatedStorage.Shared.Net)
 local Config = require(ReplicatedStorage.Shared.Config)
+local DollRenderer = require(script.Parent.DollRenderer)
 
 local RunwayUI = {}
 
@@ -191,77 +192,38 @@ local function buildCard(stage: Frame, p: any): Frame
 	end
 	local tagsH = if #tags > 0 then 44 else 0
 
-	-- outfit rows (scrolls on short phones; 22+banner+tags+3 gaps stay fixed)
-	local rows = mk("ScrollingFrame", {
-		Size = UDim2.new(1, 0, 1, -(22 + bannerH + tagsH + 24)),
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		CanvasSize = UDim2.new(),
-		AutomaticCanvasSize = Enum.AutomaticSize.Y,
-		ScrollBarThickness = 4,
-		ScrollBarImageColor3 = theme.TextMid,
-		LayoutOrder = 3,
-		ZIndex = 9,
-	}, card) :: ScrollingFrame
-	mk("UIListLayout", {
-		SortOrder = Enum.SortOrder.LayoutOrder,
-		Padding = UDim.new(0, 4),
-	}, rows)
-
+	-- the look itself: the paper doll struts the card (no text lists)
 	local summary: { any } = if type(p.summary) == "table" then p.summary else {}
-	if #summary == 0 then
-		theme.label("walked in whatever they had on 😳", {
-			Font = theme.FontBody,
-			TextColor3 = theme.TextMid,
-			TextScaled = false,
-			TextSize = 15,
-			Size = UDim2.new(1, 0, 0, 40),
-			ZIndex = 9,
-		}, rows)
-	else
-		for i, piece in summary do
-			if type(piece) ~= "table" then
-				continue
-			end
-			local row = mk("Frame", {
-				Size = UDim2.new(1, 0, 0, 30),
-				BackgroundTransparency = 1,
-				LayoutOrder = i,
-				ZIndex = 9,
-			}, rows)
-			theme.label(theme.slotIcon(tostring(piece.slot)), {
-				TextScaled = false,
-				TextSize = 17,
-				Size = UDim2.fromOffset(26, 30),
-				ZIndex = 9,
-			}, row)
-			local icon = if type(piece.icon) == "string" then piece.icon .. "  " else ""
-			theme.label(icon .. tostring(piece.item or "???"), {
-				Font = theme.FontBold,
-				TextColor3 = theme.TextDark,
-				TextScaled = false,
-				TextSize = 15,
-				TextXAlignment = Enum.TextXAlignment.Left,
-				TextTruncate = Enum.TextTruncate.AtEnd,
-				Position = UDim2.fromOffset(30, 0),
-				Size = UDim2.new(1, -56, 1, 0),
-				ZIndex = 9,
-			}, row)
-			local dotColor = theme.paletteColor(tonumber(piece.colorBucket))
-			if dotColor then
-				local colorDot = mk("Frame", {
-					AnchorPoint = Vector2.new(1, 0.5),
-					Position = UDim2.new(1, -4, 0.5, 0),
-					Size = UDim2.fromOffset(14, 14),
-					BackgroundColor3 = dotColor,
-					BorderSizePixel = 0,
-					ZIndex = 9,
-				}, row)
-				theme.corner(colorDot, 7)
-				theme.stroke(colorDot, theme.TextDark, 1, 0.55)
-			end
+	local iconStrip = ""
+	for _, piece in summary do
+		if type(piece) == "table" and type(piece.icon) == "string" then
+			iconStrip ..= piece.icon .. " "
 		end
 	end
+
+	local dollArea = mk("Frame", {
+		Size = UDim2.new(1, 0, 1, -(22 + bannerH + tagsH + 24 + 30)),
+		BackgroundTransparency = 1,
+		LayoutOrder = 3,
+		ZIndex = 9,
+	}, card) :: Frame
+	local doll = DollRenderer.create(dollArea, {
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(1, 0.98),
+		ZIndex = 9,
+	})
+	doll.setOutfit(DollRenderer.fromSummary(summary))
+	doll.setWalk(true)
+
+	theme.label(if #summary == 0 then "walked the basics 😳" else iconStrip, {
+		Font = theme.FontBody,
+		TextColor3 = theme.TextMid,
+		TextScaled = false,
+		TextSize = if #summary == 0 then 13 else 17,
+		Size = UDim2.new(1, 0, 0, 24),
+		LayoutOrder = 4,
+		ZIndex = 9,
+	}, card)
 
 	-- hashtag chips; on-brief tags go gold with a tiny stamp
 	if #tags > 0 then

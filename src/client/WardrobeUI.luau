@@ -1,9 +1,9 @@
 --!strict
--- STYLING phase panel + shop (spec §10 Wardrobe). Left: "YOUR LOOK" paper card
--- with one row per outfit slot; right: pill slot tabs over an item card grid.
--- Locked shop items buy inline through BuyItem; every outfit change
--- auto-submits, debounced under Config.Net.Limits.SubmitOutfit. The server
--- re-validates ownership/slots/colors, so client state is presentation only.
+-- STYLING phase: the dress-up screen. The paper doll is the star — every tap
+-- lands ON the doll instantly (bounce + sparkle), text is kept to a minimum.
+-- Left: the doll on a spotlight podium. Right: icon slot tabs, color swatches,
+-- and the item grid (shop items buyable inline). Auto-submits with a debounce
+-- that stays under Config.Net.Limits.SubmitOutfit.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -12,26 +12,29 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Types = require(ReplicatedStorage.Shared.Types)
 local ItemCatalog = require(ReplicatedStorage.Shared.ItemCatalog)
 
+local DollRenderer = require(script.Parent.DollRenderer)
+
 local WardrobeUI = {}
 
-local OUTFIT_SLOTS: { { name: Types.OutfitSlot, base: Types.ItemSlot, tab: string } } = {
-	{ name = "Hair", base = "Hair", tab = "Hair" },
-	{ name = "Top", base = "Top", tab = "Top" },
-	{ name = "Bottom", base = "Bottom", tab = "Bottom" },
-	{ name = "Shoes", base = "Shoes", tab = "Shoes" },
-	{ name = "Accessory1", base = "Accessory", tab = "Acc 1" },
-	{ name = "Accessory2", base = "Accessory", tab = "Acc 2" },
-	{ name = "Face", base = "Face", tab = "Face" },
+local OUTFIT_SLOTS: { { name: string, base: Types.ItemSlot } } = {
+	{ name = "Hair", base = "Hair" },
+	{ name = "Top", base = "Top" },
+	{ name = "Bottom", base = "Bottom" },
+	{ name = "Shoes", base = "Shoes" },
+	{ name = "Accessory1", base = "Accessory" },
+	{ name = "Accessory2", base = "Accessory" },
+	{ name = "Face", base = "Face" },
 }
 
-type SlotRow = {
-	button: TextButton,
-	icon: TextLabel,
-	nameLabel: TextLabel,
-	briefChip: TextLabel,
-	dot: Frame,
-	clear: TextButton,
-	stroke: UIStroke,
+local THEME_EMOJI: { [string]: string } = {
+	["Rainy Day Runway"] = "🌧️",
+	["Y2K Throwback"] = "📟",
+	["Fairycore Forest"] = "🧚",
+	["First Day of School"] = "🎒",
+	["Neon Night Out"] = "🌃",
+	["Cozy Sunday"] = "☕",
+	["Beach Festival"] = "🏖️",
+	["Winter Wonderland"] = "❄️",
 }
 
 function WardrobeUI.create(ctx: any)
@@ -39,15 +42,11 @@ function WardrobeUI.create(ctx: any)
 	local fx = ctx.fx
 	local mk = ctx.mk
 
-	-- Assigned further down, before any user input can reach the closures.
 	local setActiveSlot: (slotName: string) -> ()
-	local unequip: (slotName: string) -> ()
-	local pickColor: (bucket: number, swatch: TextButton) -> ()
 	local refreshAll: () -> ()
 
-	-- Selection survives show/hide on purpose: re-entering STYLING keeps the
-	-- player's look (the server holds its own copy and re-validates anyway).
-	local selection: Types.Outfit = {}
+	-- Selection survives show/hide on purpose: the server re-validates anyway.
+	local selection: DollRenderer.DollOutfit = {}
 	local activeSlot = "Hair"
 	local openConfirm: Frame? = nil
 	local pendingSend = false
@@ -64,36 +63,33 @@ function WardrobeUI.create(ctx: any)
 		Visible = false,
 		ZIndex = 2,
 	}, ctx.root) :: Frame
-	theme.pad(panel, 12, 10)
+	theme.pad(panel, 12, 8)
 
-	-- top banner: brief + gold theme chips + live status
+	-- compact banner: theme emoji + name + tag chips, status on the right
 	local banner = mk("Frame", {
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1, 0, 0, 40),
+		Size = UDim2.new(1, 0, 0, 34),
 	}, panel) :: Frame
-
 	local briefRow = mk("Frame", {
 		BackgroundTransparency = 1,
-		Size = UDim2.new(0.62, 0, 1, 0),
+		Size = UDim2.new(0.64, 0, 1, 0),
 	}, banner) :: Frame
 	mk("UIListLayout", {
 		FillDirection = Enum.FillDirection.Horizontal,
 		VerticalAlignment = Enum.VerticalAlignment.Center,
-		Padding = UDim.new(0, 10),
+		Padding = UDim.new(0, 8),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 	}, briefRow)
-
-	local briefLabel = theme.label("BRIEF: —", {
+	local briefLabel = theme.label("🎀 —", {
 		Font = theme.FontDisplay,
 		TextColor3 = theme.TextLight,
 		TextScaled = false,
-		TextSize = 20,
+		TextSize = 19,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		AutomaticSize = Enum.AutomaticSize.X,
 		Size = UDim2.new(0, 0, 1, 0),
 		LayoutOrder = 1,
 	}, briefRow)
-
 	local chipsHolder = mk("Frame", {
 		BackgroundTransparency = 1,
 		AutomaticSize = Enum.AutomaticSize.X,
@@ -106,167 +102,93 @@ function WardrobeUI.create(ctx: any)
 		Padding = UDim.new(0, 6),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 	}, chipsHolder)
-
 	local statusLabel = theme.label("", {
 		Font = theme.FontBold,
 		TextColor3 = theme.TextFaint,
 		TextScaled = false,
-		TextSize = 14,
+		TextSize = 13,
 		TextXAlignment = Enum.TextXAlignment.Right,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, 0, 0, 0),
-		Size = UDim2.new(0.37, 0, 1, 0),
+		Size = UDim2.new(0.35, 0, 1, 0),
 	}, banner)
 
-	-- left column: YOUR LOOK summary
-	local leftCard = theme.card({
-		Position = UDim2.new(0, 0, 0, 46),
-		Size = UDim2.new(0.3, -6, 1, -46),
-	}, panel)
-	theme.pad(leftCard, 10, 8)
-
-	theme.label("YOUR LOOK", {
-		Font = theme.FontHead,
-		TextColor3 = theme.TextMid,
-		TextScaled = false,
-		TextSize = 13,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		Size = UDim2.new(1, 0, 0, 18),
-	}, leftCard)
-
-	-- Scroll keeps every row a >=36px tap target on short (phone) viewports.
-	local rowsHolder = mk("ScrollingFrame", {
+	-- left: the doll on its podium
+	local stage = mk("Frame", {
 		BackgroundTransparency = 1,
+		Position = UDim2.new(0, 0, 0, 40),
+		Size = UDim2.new(0.4, -8, 1, -40),
+	}, panel) :: Frame
+	local glow = mk("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.52),
+		Size = UDim2.fromScale(0.95, 0.9),
+		BackgroundColor3 = theme.Pink,
+		BackgroundTransparency = 0.9,
 		BorderSizePixel = 0,
-		Position = UDim2.new(0, 0, 0, 24),
-		Size = UDim2.new(1, 0, 1, -24),
-		CanvasSize = UDim2.new(),
-		AutomaticCanvasSize = Enum.AutomaticSize.Y,
-		ScrollBarThickness = 4,
-		ScrollBarImageColor3 = theme.Purple,
-		ScrollingDirection = Enum.ScrollingDirection.Y,
-	}, leftCard) :: ScrollingFrame
-	mk("UIListLayout", { Padding = UDim.new(0, 5), SortOrder = Enum.SortOrder.LayoutOrder }, rowsHolder)
+	}, stage) :: Frame
+	theme.corner(glow, 999)
+	local podium = mk("Frame", {
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -4),
+		Size = UDim2.new(0.7, 0, 0, 16),
+		BackgroundColor3 = theme.InkLine,
+		BackgroundTransparency = 0.35,
+		BorderSizePixel = 0,
+	}, stage) :: Frame
+	theme.corner(podium, 999)
 
-	local rows: { [string]: SlotRow } = {}
-	for order, slot in OUTFIT_SLOTS do
-		local row = mk("TextButton", {
-			Text = "",
-			AutoButtonColor = false,
-			BackgroundColor3 = theme.PaperDim,
-			BorderSizePixel = 0,
-			Size = UDim2.new(1, -6, 0, 44),
-			LayoutOrder = order,
-		}, rowsHolder) :: TextButton
-		theme.corner(row, 12)
-		local rowStroke = theme.stroke(row, theme.TextDark, 2, 0.85)
+	local doll = DollRenderer.create(stage, {
+		Position = UDim2.fromScale(0.5, 0.49),
+		Size = UDim2.fromScale(1, 0.92),
+		ZIndex = 4,
+	})
 
-		local icon = theme.label(theme.slotIcon(slot.name), {
-			TextScaled = false,
-			TextSize = 20,
-			Position = UDim2.new(0, 4, 0, 0),
-			Size = UDim2.new(0, 32, 1, 0),
-		}, row)
-
-		local nameLabel = theme.label("", {
-			Font = theme.FontBold,
-			TextColor3 = theme.TextMid,
-			TextScaled = false,
-			TextSize = 13,
-			TextXAlignment = Enum.TextXAlignment.Left,
-			TextTruncate = Enum.TextTruncate.AtEnd,
-			Position = UDim2.new(0, 38, 0, 0),
-			Size = UDim2.new(1, -100, 1, 0),
-		}, row)
-
-		local briefChip = theme.label("on brief ✨", {
-			Font = theme.FontBold,
-			TextColor3 = theme.TextDark,
-			BackgroundTransparency = 0,
-			BackgroundColor3 = theme.Gold,
-			TextScaled = false,
-			TextSize = 10,
-			Position = UDim2.new(0, 38, 0, 24),
-			Size = UDim2.new(0, 70, 0, 15),
-			Visible = false,
-		}, row)
-		theme.corner(briefChip, 999)
-
-		local dot = mk("Frame", {
-			BackgroundColor3 = theme.Paper,
-			BorderSizePixel = 0,
-			AnchorPoint = Vector2.new(1, 0.5),
-			Position = UDim2.new(1, -44, 0.5, 0),
-			Size = UDim2.fromOffset(12, 12),
-			Visible = false,
-		}, row) :: Frame
-		theme.corner(dot, 999)
-		theme.stroke(dot, theme.TextDark, 1, 0.5)
-
-		local clear = mk("TextButton", {
-			Text = "✕",
-			Font = theme.FontBold,
-			TextSize = 14,
-			TextColor3 = theme.TextMid,
-			BackgroundTransparency = 1,
-			AnchorPoint = Vector2.new(1, 0.5),
-			Position = UDim2.new(1, -2, 0.5, 0),
-			Size = UDim2.fromOffset(36, 36),
-			Visible = false,
-		}, row) :: TextButton
-
-		rows[slot.name] = {
-			button = row,
-			icon = icon,
-			nameLabel = nameLabel,
-			briefChip = briefChip,
-			dot = dot,
-			clear = clear,
-			stroke = rowStroke,
-		}
-		row.Activated:Connect(function()
-			setActiveSlot(slot.name)
-		end)
-		clear.Activated:Connect(function()
-			unequip(slot.name)
-		end)
-	end
-
-	-- right column: tabs + color row + item grid
+	-- right: tabs + swatches + grid
 	local rightCol = mk("Frame", {
 		BackgroundTransparency = 1,
-		Position = UDim2.new(0.3, 6, 0, 46),
-		Size = UDim2.new(0.7, -6, 1, -46),
+		Position = UDim2.new(0.4, 6, 0, 40),
+		Size = UDim2.new(0.6, -6, 1, -40),
 	}, panel) :: Frame
 
 	local tabBar = mk("Frame", {
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1, 0, 0, 38),
+		Size = UDim2.new(1, 0, 0, 44),
 	}, rightCol) :: Frame
 	mk("UIListLayout", {
 		FillDirection = Enum.FillDirection.Horizontal,
-		Padding = UDim.new(0, 4),
+		Padding = UDim.new(0, 5),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 	}, tabBar)
 
 	local tabs: { [string]: TextButton } = {}
+	local tabDots: { [string]: Frame } = {}
 	for order, slot in OUTFIT_SLOTS do
 		local tab = mk("TextButton", {
-			Text = `{theme.slotIcon(slot.name)} {slot.tab}`,
-			Font = theme.FontBold,
-			TextSize = 12,
-			TextTruncate = Enum.TextTruncate.AtEnd,
-			TextColor3 = theme.TextFaint,
+			Text = theme.slotIcon(slot.name),
+			Font = theme.FontDisplay,
+			TextSize = 20,
 			AutoButtonColor = false,
 			BackgroundColor3 = theme.InkLine,
 			BackgroundTransparency = 0.55,
 			BorderSizePixel = 0,
-			Size = UDim2.new(1 / 7, -4, 1, 0),
+			Size = UDim2.new(1 / 7, -5, 1, 0),
 			LayoutOrder = order,
 		}, tabBar) :: TextButton
-		theme.corner(tab, 999)
+		theme.corner(tab, 14)
+		-- little pink dot = something is equipped in this slot
+		local dot = mk("Frame", {
+			AnchorPoint = Vector2.new(1, 0),
+			Position = UDim2.new(1, -5, 0, 5),
+			Size = UDim2.fromOffset(9, 9),
+			BackgroundColor3 = theme.Pink,
+			BorderSizePixel = 0,
+			Visible = false,
+		}, tab) :: Frame
+		theme.corner(dot, 999)
 		tabs[slot.name] = tab
+		tabDots[slot.name] = dot
 		tab.Activated:Connect(function()
 			setActiveSlot(slot.name)
 		end)
@@ -274,21 +196,14 @@ function WardrobeUI.create(ctx: any)
 
 	local colorRow = mk("Frame", {
 		BackgroundTransparency = 1,
-		Position = UDim2.new(0, 0, 0, 44),
+		Position = UDim2.new(0, 0, 0, 50),
 		Size = UDim2.new(1, 0, 0, 40),
 		Visible = false,
 	}, rightCol) :: Frame
-	theme.label("🎨", {
-		TextScaled = false,
-		TextSize = 18,
-		Position = UDim2.new(0, 0, 0, 0),
-		Size = UDim2.fromOffset(26, 40),
-	}, colorRow)
 	local swatchScroll = mk("ScrollingFrame", {
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		Position = UDim2.new(0, 30, 0, 0),
-		Size = UDim2.new(1, -30, 1, 0),
+		Size = UDim2.new(1, 0, 1, 0),
 		CanvasSize = UDim2.new(),
 		AutomaticCanvasSize = Enum.AutomaticSize.X,
 		ScrollBarThickness = 3,
@@ -303,6 +218,7 @@ function WardrobeUI.create(ctx: any)
 	}, swatchScroll)
 
 	local swatchStrokes: { UIStroke } = {}
+	local pickColor: (bucket: number, swatch: TextButton) -> ()
 	for bucket, color in Config.Palette do
 		local swatch = mk("TextButton", {
 			Text = "",
@@ -322,8 +238,8 @@ function WardrobeUI.create(ctx: any)
 	local gridScroll = mk("ScrollingFrame", {
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		Position = UDim2.new(0, 0, 0, 44),
-		Size = UDim2.new(1, 0, 1, -44),
+		Position = UDim2.new(0, 0, 0, 50),
+		Size = UDim2.new(1, 0, 1, -50),
 		CanvasSize = UDim2.new(),
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		ScrollBarThickness = 5,
@@ -331,7 +247,7 @@ function WardrobeUI.create(ctx: any)
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 	}, rightCol) :: ScrollingFrame
 	mk("UIGridLayout", {
-		CellSize = UDim2.new(1 / 3, -12, 0, 116),
+		CellSize = UDim2.new(1 / 3, -12, 0, 112),
 		CellPadding = UDim2.new(0, 8, 0, 8),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 	}, gridScroll)
@@ -347,7 +263,7 @@ function WardrobeUI.create(ctx: any)
 		end
 	end
 
-	local function slotInfo(slotName: string): { name: Types.OutfitSlot, base: Types.ItemSlot, tab: string }?
+	local function slotInfo(slotName: string): { name: string, base: Types.ItemSlot }?
 		for _, slot in OUTFIT_SLOTS do
 			if slot.name == slotName then
 				return slot
@@ -363,21 +279,6 @@ function WardrobeUI.create(ctx: any)
 	local function equippedDef(slotName: string): any
 		local piece = selection[slotName]
 		return if piece then ItemCatalog.get(piece.itemId) else nil
-	end
-
-	local function isOnBrief(def: any): boolean
-		local tags = ctx.data.themeTags
-		if type(tags) ~= "table" then
-			return false
-		end
-		for _, tag in def.styleTags do
-			for _, want in tags do
-				if tag == want then
-					return true
-				end
-			end
-		end
-		return false
 	end
 
 	local function buildOutfit(): Types.Outfit
@@ -397,8 +298,8 @@ function WardrobeUI.create(ctx: any)
 		return outfit
 	end
 
-	-- Single pending timer keeps us under the 1-per-2s SubmitOutfit limit while
-	-- guaranteeing the latest state ships (buildOutfit runs at fire time).
+	-- Single pending timer keeps us under the SubmitOutfit limit while making
+	-- sure the latest state ships (buildOutfit runs at fire time).
 	local function send()
 		if pendingSend then
 			return
@@ -410,7 +311,7 @@ function WardrobeUI.create(ctx: any)
 			pendingSend = false
 			lastSend = os.clock()
 			Net.fireServer("SubmitOutfit", buildOutfit())
-			setStatus("Look sent ✓ — latest walk wins", theme.Mint)
+			setStatus("look sent ✓", theme.Mint)
 		end)
 	end
 
@@ -421,43 +322,11 @@ function WardrobeUI.create(ctx: any)
 		end
 	end
 
-	local function refreshRows()
-		for _, slot in OUTFIT_SLOTS do
-			local r = rows[slot.name]
-			local piece = selection[slot.name]
-			local def = if piece then ItemCatalog.get(piece.itemId) else nil
-			if def and piece then
-				r.icon.Text = def.icon
-				r.icon.TextTransparency = 0
-				r.nameLabel.Text = def.name
-				r.nameLabel.TextColor3 = theme.TextDark
-				local onBrief = isOnBrief(def)
-				r.briefChip.Visible = onBrief
-				r.nameLabel.Position = if onBrief then UDim2.new(0, 38, 0, 5) else UDim2.new(0, 38, 0, 0)
-				r.nameLabel.Size = if onBrief then UDim2.new(1, -100, 0, 18) else UDim2.new(1, -100, 1, 0)
-				local swatchColor = theme.paletteColor(piece.colorBucket)
-				r.dot.Visible = swatchColor ~= nil
-				if swatchColor then
-					r.dot.BackgroundColor3 = swatchColor
-				end
-				r.clear.Visible = true
-				r.button.BackgroundTransparency = 0
-			else
-				r.icon.Text = theme.slotIcon(slot.name)
-				r.icon.TextTransparency = 0.45
-				r.nameLabel.Text = "empty · tap to browse"
-				r.nameLabel.TextColor3 = theme.TextMid
-				r.nameLabel.Position = UDim2.new(0, 38, 0, 0)
-				r.nameLabel.Size = UDim2.new(1, -100, 1, 0)
-				r.briefChip.Visible = false
-				r.dot.Visible = false
-				r.clear.Visible = false
-				r.button.BackgroundTransparency = 0.45
-			end
-			local active = slot.name == activeSlot
-			r.stroke.Color = if active then theme.Pink else theme.TextDark
-			r.stroke.Transparency = if active then 0.1 else 0.85
-			r.stroke.Thickness = if active then 2.5 else 2
+	local function redrawDoll(celebrate: boolean?)
+		doll.setOutfit(selection)
+		if celebrate then
+			doll.bounce()
+			fx.sparkle(stage, 7)
 		end
 	end
 
@@ -467,7 +336,7 @@ function WardrobeUI.create(ctx: any)
 			local active = slot.name == activeSlot
 			tab.BackgroundColor3 = if active then theme.Pink else theme.InkLine
 			tab.BackgroundTransparency = if active then 0 else 0.55
-			tab.TextColor3 = if active then Color3.new(1, 1, 1) else theme.TextFaint
+			tabDots[slot.name].Visible = selection[slot.name] ~= nil and not active
 		end
 	end
 
@@ -475,7 +344,7 @@ function WardrobeUI.create(ctx: any)
 		local def = equippedDef(activeSlot)
 		local colorable = def ~= nil and def.colorable == true
 		colorRow.Visible = colorable
-		local gridY = if colorable then 90 else 44
+		local gridY = if colorable then 96 else 50
 		gridScroll.Position = UDim2.new(0, 0, 0, gridY)
 		gridScroll.Size = UDim2.new(1, 0, 1, -gridY)
 		if colorable then
@@ -490,13 +359,11 @@ function WardrobeUI.create(ctx: any)
 		end
 	end
 
-	-- wiggleTarget must be manually positioned (grid cells ignore Position).
-	local function equip(slotName: string, def: any, wiggleTarget: GuiObject?): boolean
+	local function equip(slotName: string, def: any): boolean
 		local info = slotInfo(slotName)
 		if info == nil or def == nil or def.slot ~= info.base then
 			return false
 		end
-		-- One accessory can't ride in both slots.
 		local other: string? = if slotName == "Accessory1"
 			then "Accessory2"
 			elseif slotName == "Accessory2" then "Accessory1"
@@ -504,27 +371,28 @@ function WardrobeUI.create(ctx: any)
 		if other then
 			local worn = selection[other]
 			if worn and worn.itemId == def.id then
-				if wiggleTarget then
-					fx.shake(wiggleTarget, 4, 0.3)
-				end
-				setStatus("That's already in your other accessory slot! 💫", theme.Gold)
+				setStatus("already on! 💫", theme.Gold)
 				return false
 			end
 		end
-		local prev = selection[slotName]
-		if prev and prev.itemId == def.id then
-			return false -- already wearing it; the ✕ in YOUR LOOK removes it
-		end
 		selection[slotName] = { itemId = def.id }
-		setStatus(`{def.icon} {def.name} on!`, theme.Mint)
+		redrawDoll(true)
 		refreshAll()
-		fx.sparkle(rows[slotName].button, 4)
 		send()
 		return true
 	end
 
+	local function unequip(slotName: string)
+		if selection[slotName] == nil then
+			return
+		end
+		selection[slotName] = nil
+		redrawDoll(true)
+		refreshAll()
+		send()
+	end
+
 	local function tryBuy(def: any, slotName: string, confirmFrame: Frame)
-		-- BuyItem allows 8 per 10s; a floor between invokes keeps us clear.
 		if buyBusy or os.clock() - lastBuy < 1.5 then
 			return
 		end
@@ -543,16 +411,16 @@ function WardrobeUI.create(ctx: any)
 			ctx.refreshHUD()
 			closeConfirm()
 			fx.confetti(rightCol, 26)
-			if not equip(slotName, def, nil) then
-				refreshAll() -- equip can no-op; still repaint the owned state
+			setStatus(`{def.icon} yours!! 🎉`, theme.Gold)
+			if not equip(slotName, def) then
+				refreshAll()
 			end
-			setStatus(`{def.icon} {def.name} is yours!! 🎉`, theme.Gold)
 		elseif result and result.reason == "poor" then
 			fx.shake(confirmFrame, 5, 0.35)
-			setStatus("Not enough Threads 🧵 — win runways to earn more!", theme.Danger)
+			setStatus("not enough 🧵 — win runways!", theme.Danger)
 		else
 			closeConfirm()
-			setStatus("Hmm, that didn't go through — try again in a sec.", theme.TextFaint)
+			setStatus("hmm — try again in a sec", theme.TextFaint)
 		end
 	end
 
@@ -569,31 +437,28 @@ function WardrobeUI.create(ctx: any)
 		theme.corner(confirm, 14)
 		theme.stroke(confirm, theme.Gold, 2, 0.2)
 		openConfirm = confirm
-
-		theme.label(`Buy {def.name}\nfor 🧵{def.priceThreads}?`, {
+		theme.label(`{def.icon} 🧵{def.priceThreads}?`, {
 			Font = theme.FontBold,
 			TextColor3 = theme.TextLight,
 			TextScaled = false,
-			TextSize = 13,
-			TextWrapped = true,
-			Position = UDim2.new(0, 4, 0, 4),
-			Size = UDim2.new(1, -8, 0, 60),
+			TextSize = 15,
+			Position = UDim2.new(0, 4, 0, 6),
+			Size = UDim2.new(1, -8, 0, 42),
 			ZIndex = 7,
 		}, confirm)
-
 		local buy = theme.button("Buy", {
 			TextScaled = false,
 			TextSize = 14,
-			Position = UDim2.new(0.04, 0, 1, -44),
-			Size = UDim2.new(0.44, 0, 0, 38),
+			Position = UDim2.new(0.05, 0, 1, -44),
+			Size = UDim2.new(0.42, 0, 0, 38),
 			ZIndex = 7,
 		}, confirm)
-		local cancel = theme.button("Not yet", {
+		local cancel = theme.button("✕", {
 			Secondary = true,
 			TextScaled = false,
-			TextSize = 12,
-			Position = UDim2.new(0.52, 0, 1, -44),
-			Size = UDim2.new(0.44, 0, 0, 38),
+			TextSize = 14,
+			Position = UDim2.new(0.53, 0, 1, -44),
+			Size = UDim2.new(0.42, 0, 0, 38),
 			ZIndex = 7,
 		}, confirm)
 		buy.Activated:Connect(function()
@@ -626,30 +491,41 @@ function WardrobeUI.create(ctx: any)
 			if equipped then 0 else 0.2
 		)
 
-		local icon = theme.label(def.icon, {
+		theme.label(def.icon, {
 			TextScaled = false,
-			TextSize = 34,
-			Position = UDim2.new(0, 0, 0, 6),
-			Size = UDim2.new(1, 0, 0, 48),
+			TextSize = 40,
+			Position = UDim2.new(0, 0, 0, 8),
+			Size = UDim2.new(1, 0, 0, 56),
 			TextTransparency = if ownedItem then 0 else 0.35,
 		}, card)
-
 		theme.label(def.name, {
 			Font = theme.FontBold,
-			TextColor3 = if equipped then Color3.new(1, 1, 1) else theme.TextDark,
+			TextColor3 = if equipped then Color3.new(1, 1, 1) else theme.TextMid,
 			TextScaled = false,
-			TextSize = 12,
+			TextSize = 11,
 			TextTruncate = Enum.TextTruncate.AtEnd,
-			Position = UDim2.new(0, 4, 0, 58),
-			Size = UDim2.new(1, -8, 0, 15),
+			Position = UDim2.new(0, 4, 1, -22),
+			Size = UDim2.new(1, -8, 0, 14),
 			TextTransparency = if ownedItem then 0 else 0.3,
 		}, card)
 
-		if isOnBrief(def) then
+		-- on-brief sparkle badge
+		local onBrief = false
+		local tags = ctx.data.themeTags
+		if type(tags) == "table" then
+			for _, tag in def.styleTags do
+				for _, want in tags do
+					if tag == want then
+						onBrief = true
+					end
+				end
+			end
+		end
+		if onBrief then
 			theme.label("✨", {
 				TextScaled = false,
-				TextSize = 13,
-				Position = UDim2.new(0, 4, 0, 4),
+				TextSize = 14,
+				Position = UDim2.new(0, 5, 0, 4),
 				Size = UDim2.fromOffset(18, 18),
 			}, card)
 		end
@@ -676,8 +552,8 @@ function WardrobeUI.create(ctx: any)
 				BackgroundTransparency = 0,
 				BackgroundColor3 = theme.Gold,
 				AnchorPoint = Vector2.new(0.5, 1),
-				Position = UDim2.new(0.5, 0, 1, -6),
-				Size = UDim2.fromOffset(64, 20),
+				Position = UDim2.new(0.5, 0, 1, -4),
+				Size = UDim2.fromOffset(62, 19),
 			}, card)
 			theme.corner(tag, 999)
 		end
@@ -686,10 +562,10 @@ function WardrobeUI.create(ctx: any)
 			if not ownedItem then
 				openBuyConfirm(def, card)
 			elseif equipped then
-				fx.pulse(card, 0.06) -- already on; the ✕ in YOUR LOOK removes it
+				unequip(activeSlot) -- tap again = take it off
 			else
 				closeConfirm()
-				equip(activeSlot, def, icon)
+				equip(activeSlot, def)
 			end
 		end)
 	end
@@ -711,7 +587,6 @@ function WardrobeUI.create(ctx: any)
 	end
 
 	refreshAll = function()
-		refreshRows()
 		refreshTabs()
 		rebuildGrid(true)
 		updateColorRow()
@@ -723,21 +598,10 @@ function WardrobeUI.create(ctx: any)
 			return
 		end
 		activeSlot = slotName
-		refreshRows()
 		refreshTabs()
 		rebuildGrid(false)
 		updateColorRow()
 		fx.pulse(tabs[slotName], 0.1)
-	end
-
-	unequip = function(slotName: string)
-		if selection[slotName] == nil then
-			return
-		end
-		selection[slotName] = nil
-		setStatus("Took it off — fresh canvas ✨", theme.TextFaint)
-		refreshAll()
-		send()
 	end
 
 	pickColor = function(bucket: number, swatch: TextButton)
@@ -748,25 +612,20 @@ function WardrobeUI.create(ctx: any)
 		end
 		piece.colorBucket = if piece.colorBucket == bucket then nil else bucket
 		fx.pulse(swatch, 0.15)
-		refreshRows()
+		redrawDoll(true)
 		updateColorRow()
 		send()
-		local colorName = Config.PaletteNames[bucket] or "color"
-		if piece.colorBucket then
-			setStatus(`Painted it {colorName} 🎨`, theme.Lilac)
-		else
-			setStatus("Back to the original color", theme.Lilac)
-		end
 	end
 
 	refreshAll()
+	redrawDoll(false)
 
 	-- ============================ contract ============================
 
 	return {
 		show = function(payload: any?)
 			if payload and type(payload.theme) == "string" then
-				briefLabel.Text = `BRIEF: {string.upper(payload.theme)}`
+				briefLabel.Text = `{THEME_EMOJI[payload.theme] or "🎀"} {string.upper(payload.theme)}`
 			end
 			local tags = (payload and payload.themeTags) or ctx.data.themeTags
 			if type(tags) == "table" then
@@ -780,13 +639,16 @@ function WardrobeUI.create(ctx: any)
 					theme.chip(`#{tostring(tag)}`, theme.Gold, chipsHolder)
 				end
 			end
-			setStatus("Style it up — your look auto-sends ✨", theme.TextFaint)
+			setStatus("tap to dress her ✨")
 			refreshAll()
+			redrawDoll(false)
+			doll.setSway(true)
 			panel.Visible = true
 			fx.pop(panel, 0.95)
 		end,
 		hide = function()
 			closeConfirm()
+			doll.setSway(false)
 			panel.Visible = false
 		end,
 	}
