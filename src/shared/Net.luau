@@ -18,10 +18,12 @@ local EVENT_NAMES = {
 	"RoundResults",
 	"TrendBoard",
 	"TrendCrash",
+	"ReactionBurst", -- anonymous emote echo during RUNWAY
 }
 
 local FUNCTION_NAMES = {
 	"GetBootstrap",
+	"BuyItem", -- (itemId) → { ok, reason?, threads? }
 }
 
 local FOLDER_NAME = "Remotes"

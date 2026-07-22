@@ -17,9 +17,23 @@ export type ItemDef = {
 	rarity: Rarity,
 	styleTags: { string },
 	colorable: boolean,
+	icon: string, -- emoji glyph; stands in for thumbnails until real assets land
 	assetId: number, -- 0 = graybox placeholder; replace with real catalog/mesh assets
 	priceThreads: number?, -- nil = free starter item
 }
+
+-- AI stylist filling out a round (BotService). Field names deliberately mirror
+-- the Player properties the round loop reads, so an Entrant can be either.
+-- Parent is always nil for bots — that is how Net.fireClient sites skip them.
+export type BotEntrant = {
+	Name: string,
+	DisplayName: string,
+	UserId: number, -- negative, so clients can tell "no real avatar"
+	Parent: Instance?,
+	__bot: true,
+}
+
+export type Entrant = Player | BotEntrant
 
 export type OutfitPiece = {
 	itemId: string,

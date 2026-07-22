@@ -11,7 +11,7 @@ local BetService = {}
 
 local open = false
 local candidateSet: { [ElementKey]: boolean } = {}
-local picks: { [Player]: ElementKey } = {}
+local picks: { [Types.Entrant]: ElementKey } = {}
 
 function BetService.start(candidates: { ElementKey })
 	open = true
@@ -22,7 +22,7 @@ function BetService.start(candidates: { ElementKey })
 	end
 end
 
-function BetService.place(player: Player, key: ElementKey): boolean
+function BetService.place(player: Types.Entrant, key: ElementKey): boolean
 	if not open or not candidateSet[key] or picks[player] ~= nil then
 		return false
 	end
@@ -35,8 +35,8 @@ function BetService.close()
 end
 
 -- winnerKey = argmax S(e) among candidates (resolved by GameLoop from ingest data).
-function BetService.resolve(winnerKey: ElementKey?): { [Player]: boolean }
-	local winners: { [Player]: boolean } = {}
+function BetService.resolve(winnerKey: ElementKey?): { [Types.Entrant]: boolean }
+	local winners: { [Types.Entrant]: boolean } = {}
 	if winnerKey then
 		for player, key in picks do
 			if key == winnerKey then
@@ -47,8 +47,14 @@ function BetService.resolve(winnerKey: ElementKey?): { [Player]: boolean }
 	return winners
 end
 
-function BetService.getPick(player: Player): ElementKey?
+function BetService.getPick(player: Types.Entrant): ElementKey?
 	return picks[player]
+end
+
+-- Snapshot of every pick this round (economy needs to know who played at all,
+-- to advance or reset Oracle streaks).
+function BetService.getAllPicks(): { [Types.Entrant]: ElementKey }
+	return table.clone(picks)
 end
 
 return BetService

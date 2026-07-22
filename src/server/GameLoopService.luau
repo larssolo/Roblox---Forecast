@@ -21,10 +21,12 @@ local EconomyService = require(script.Parent.EconomyService)
 local TrendEngineService = require(script.Parent.TrendEngineService)
 local VotingService = require(script.Parent.VotingService)
 local BetService = require(script.Parent.BetService)
+local BotService = require(script.Parent.BotService)
 
 type Outfit = Types.Outfit
 type ElementKey = Types.ElementKey
 type RoundState = Types.RoundState
+type Entrant = Types.Entrant
 
 local GameLoopService = {}
 
@@ -33,11 +35,12 @@ local stateEndsAt = 0
 
 type RoundData = {
 	theme: string,
-	participants: { [Player]: boolean },
-	outfits: { [Player]: { outfit: Outfit, order: number } },
+	themeTags: { [string]: boolean },
+	participants: { [Entrant]: boolean },
+	outfits: { [Entrant]: { outfit: Outfit, order: number } },
 	nextOrder: number,
 	candidates: { ElementKey },
-	lookOwner: { [string]: Player },
+	lookOwner: { [string]: Entrant },
 }
 local round: RoundData? = nil
 
@@ -103,8 +106,11 @@ local function validateOutfit(player: Player, raw: any): Outfit?
 	return clean
 end
 
--- Graybox runway payload: text summary instead of rendered avatars (README/TODO).
-local function outfitSummary(outfit: Outfit): { { slot: string, item: string, color: string? } }
+-- Runway card payload: icon + color data lets the client render styled cards
+-- while avatars remain a TODO (spec §9.8).
+local function outfitSummary(
+	outfit: Outfit
+): { { slot: string, item: string, icon: string, color: string?, colorBucket: number? } }
 	local summary = {}
 	for slotName in BASE_SLOT do
 		local piece = outfit[slotName]
@@ -114,7 +120,9 @@ local function outfitSummary(outfit: Outfit): { { slot: string, item: string, co
 				table.insert(summary, {
 					slot = slotName,
 					item = def.name,
+					icon = def.icon,
 					color = piece.colorBucket and Config.PaletteNames[piece.colorBucket] or nil,
+					colorBucket = piece.colorBucket,
 				})
 			end
 		end
@@ -123,6 +131,31 @@ local function outfitSummary(outfit: Outfit): { { slot: string, item: string, co
 		return a.slot < b.slot
 	end)
 	return summary
+end
+
+-- Bare style tags of a look ("tag:y2k" → "y2k") for hashtag chips on the card.
+local function tagsOf(elements: { ElementKey }): { string }
+	local out = {}
+	for _, key in elements do
+		local tag = string.match(key, "^tag:(.+)$")
+		if tag then
+			table.insert(out, tag)
+		end
+	end
+	table.sort(out)
+	return out
+end
+
+-- Dressing on-brief pays a small score bonus (Config.Round.ThemeMatch*).
+local function themeMultiplierFor(elements: { ElementKey }, themeTags: { [string]: boolean }): number
+	local matches = 0
+	for _, key in elements do
+		local tag = string.match(key, "^tag:(.+)$")
+		if tag and themeTags[tag] then
+			matches += 1
+		end
+	end
+	return 1 + math.min(matches * Config.Round.ThemeMatchPerTag, Config.Round.ThemeMatchCap)
 end
 
 local function topCandidates(elementSets: { { ElementKey } }): { ElementKey }
@@ -162,8 +195,14 @@ local function registerHandlers()
 				threads = profile.threads,
 				xp = profile.xp,
 				rank = profile.rank,
+				inventory = profile.inventory,
+				stats = profile.stats,
 			} or nil,
 		}
+	end)
+
+	Net.onServerInvoke("BuyItem", function(player: Player, itemId: any)
+		return EconomyService.purchase(player, itemId)
 	end)
 
 	Net.onServerEvent("SubmitOutfit", function(player: Player, raw: any)
@@ -199,8 +238,17 @@ local function registerHandlers()
 		VotingService.castVote(player, lookId, stars)
 	end)
 
-	Net.onServerEvent("React", function(_player: Player, _emoteId: any)
-		-- TODO(v0.1 polish): broadcast anonymous emote bursts during runway.
+	Net.onServerEvent("React", function(_player: Player, emoteId: any)
+		-- Anonymous emote bursts (spec §3). Echo only known glyphs, only mid-show.
+		if state ~= "RUNWAY" or typeof(emoteId) ~= "string" then
+			return
+		end
+		for _, emote in Config.Emotes do
+			if emote == emoteId then
+				Net.fireAll("ReactionBurst", { emote = emoteId })
+				return
+			end
+		end
 	end)
 end
 
@@ -208,33 +256,61 @@ end
 
 local function runRound()
 	local theme = Config.Themes[math.random(1, #Config.Themes)]
-	setState("BRIEF", Config.Round.BriefTime, { theme = theme, board = TrendEngineService.getBoard() })
+	local themeTagList = (Config.ThemeTags[theme] or {}) :: { string }
+	setState("BRIEF", Config.Round.BriefTime, {
+		theme = theme,
+		themeTags = themeTagList,
+		board = TrendEngineService.getBoard(),
+	})
 	task.wait(Config.Round.BriefTime)
 
-	-- STYLING: everyone present participates automatically (v0.1 simplification)
+	-- STYLING: everyone present participates automatically (v0.1 simplification);
+	-- AI stylists top the round up so it always feels populated (Config.Bots).
+	local themeTags: { [string]: boolean } = {}
+	for _, tag in themeTagList do
+		themeTags[tag] = true
+	end
 	local r: RoundData = {
 		theme = theme,
+		themeTags = themeTags,
 		participants = {},
 		outfits = {},
 		nextOrder = 0,
 		candidates = {},
 		lookOwner = {},
 	}
-	for _, player in Players:GetPlayers() do
+	local humans = Players:GetPlayers()
+	for _, player in humans do
 		r.participants[player] = true
 	end
+	for _, bot in BotService.rosterFor(#humans) do
+		r.participants[bot] = true
+	end
 	round = r
-	setState("STYLING", Config.Round.StylingTime, { theme = theme })
+	setState("STYLING", Config.Round.StylingTime, { theme = theme, themeTags = themeTagList })
+	BotService.styleRound(theme, function(bot, outfit)
+		if round ~= r or state ~= "STYLING" then
+			return -- the round moved on while this bot dawdled
+		end
+		r.nextOrder += 1
+		r.outfits[bot] = { outfit = outfit, order = r.nextOrder }
+	end)
 	task.wait(Config.Round.StylingTime)
 
-	-- Build looks from players still in the server. No submission → empty outfit
-	-- (walks with score, no elements, multiplier 1.0).
-	type Look = { id: string, player: Player, outfit: Outfit, order: number, elements: { ElementKey } }
+	-- Build looks from entrants still in the round: humans still in the server
+	-- plus every bot. No submission → empty outfit (walks with score, no
+	-- elements, multiplier 1.0).
+	type Look = { id: string, player: Entrant, outfit: Outfit, order: number, elements: { ElementKey } }
 	local looks: { Look } = {}
 	local lookIndex = 0
+	local humanLooks = 0
 	for player in r.participants do
-		if player.Parent == Players then
+		local isBot = BotService.isBot(player)
+		if (player :: Player).Parent == Players or isBot then
 			lookIndex += 1
+			if not isBot then
+				humanLooks += 1
+			end
 			local entry = r.outfits[player]
 			local outfit: Outfit = entry and entry.outfit or {}
 			table.insert(looks, {
@@ -247,9 +323,9 @@ local function runRound()
 		end
 	end
 
-	if #looks < Config.Round.MinLooksToRun then
+	if humanLooks == 0 or #looks < Config.Round.MinLooksToRun then
 		round = nil
-		return -- back to LOBBY; not enough players stayed
+		return -- back to LOBBY; nobody real left to play for
 	end
 
 	-- FORECAST
@@ -261,9 +337,10 @@ local function runRound()
 	BetService.start(r.candidates)
 	local candidateView = {}
 	for _, key in r.candidates do
-		table.insert(candidateView, { key = key, label = TrendEngineService.labelFor(key) })
+		table.insert(candidateView, TrendEngineService.view(key)) -- key/label/heat/delta24h/crashed
 	end
 	setState("FORECAST", Config.Round.ForecastTime, { candidates = candidateView })
+	BotService.placeBets(r.candidates)
 	task.wait(Config.Round.ForecastTime)
 	BetService.close()
 
@@ -281,13 +358,20 @@ local function runRound()
 	setState("RUNWAY", #looks * perLook, { total = #looks })
 	for i, look in looks do
 		VotingService.openLook(look.id)
-		local payload = { lookId = look.id, index = i, total = #looks, summary = outfitSummary(look.outfit) }
-		Net.fireAllExcept("RunwayLook", look.player, payload)
+		local payload = {
+			lookId = look.id,
+			index = i,
+			total = #looks,
+			summary = outfitSummary(look.outfit),
+			tags = tagsOf(look.elements),
+		}
+		Net.fireAllExcept("RunwayLook", look.player :: Player, payload)
 		local ownPayload = table.clone(payload)
 		ownPayload.yours = true
-		if look.player.Parent == Players then
-			Net.fireClient("RunwayLook", look.player, ownPayload)
+		if (look.player :: Player).Parent == Players then
+			Net.fireClient("RunwayLook", look.player :: Player, ownPayload)
 		end
+		BotService.voteOnLook(look.id, look.elements, r.theme)
 		task.wait(perLook)
 	end
 	VotingService.close()
@@ -298,11 +382,13 @@ local function runRound()
 	for _, look in looks do
 		local raw = voting.rawScores[look.id]
 		local mult = TrendEngineService.lookMultiplierFor(look.elements)
+		local themeMult = themeMultiplierFor(look.elements, r.themeTags)
 		table.insert(scored, {
 			look = look,
 			raw = raw,
 			mult = mult,
-			final = raw * mult,
+			themeMult = themeMult,
+			final = raw * mult * themeMult,
 		})
 	end
 	table.sort(scored, function(a, b)
@@ -330,19 +416,21 @@ local function runRound()
 	end
 	local betWinners = BetService.resolve(betWinnerKey)
 
-	local placements: { Player } = {}
+	local placements: { Entrant } = {}
 	for _, s in scored do
 		table.insert(placements, s.look.player)
 	end
-	local awards = EconomyService.awardRound(placements, voting.votedSet, betWinners)
+	local awards = EconomyService.awardRound(placements, voting.votedSet, betWinners, BetService.getAllPicks())
 
 	-- Public podium: top 3 named. Bottom placements are NEVER listed (spec §6).
+	-- userId lets clients show real avatar headshots (bots are negative → glyph).
 	local podium = {}
 	for i = 1, math.min(3, #scored) do
 		local s = scored[i]
 		table.insert(podium, {
 			place = i,
 			name = s.look.player.DisplayName,
+			userId = s.look.player.UserId,
 			score = math.floor(s.final * 100) / 100,
 		})
 	end
@@ -352,12 +440,13 @@ local function runRound()
 	end
 
 	-- Per-player tailored payload: your placement stays private (spec §6).
+	-- Bots never receive results — their Parent is nil.
 	for placement, s in scored do
 		local player = s.look.player
-		if player.Parent == Players then
+		if (player :: Player).Parent == Players then
 			local award = awards[player]
 			local pick = BetService.getPick(player)
-			Net.fireClient("RoundResults", player, {
+			Net.fireClient("RoundResults", player :: Player, {
 				podium = podium,
 				trendImpact = ingest.impacts,
 				betWinner = betWinnerKey and {
@@ -368,6 +457,7 @@ local function runRound()
 					placement = placement,
 					rawScore = s.raw,
 					multiplier = s.mult,
+					themeBonus = s.themeMult,
 					finalScore = s.final,
 					reward = award,
 					betPick = pick,
