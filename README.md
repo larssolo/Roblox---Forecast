@@ -29,6 +29,7 @@ Open an empty baseplate in Roblox Studio, connect with the
 
 ```sh
 lune run tests/trendmath.spec.luau   # 31 assertions on the pure trend math
+lune run tests/fullround.spec.luau   # 113 assertions: two complete headless rounds
 selene generate-roblox-std           # once
 selene src                           # lint
 stylua src tests                     # format
@@ -37,6 +38,14 @@ stylua src tests                     # format
 `TrendMath.luau` deliberately has **zero requires** so the whole trend economy
 math is unit-testable outside Studio and reusable unchanged when the engine
 goes cross-server in v0.2.
+
+`tests/fullround.spec.luau` goes much further: `tests/harness/roblox.luau`
+stubs `game`/`Instance`/`Players`/remotes and loads the **real** server modules,
+then plays two complete rounds with six fake players — lobby gating,
+invalid-outfit rejection, rate limiting + kick, mid-round join/leave, vote
+normalization with every rejection path (self/duplicate/late/non-integer),
+bet resolution, exact Threads/XP payouts, and a forced trend crash. It catches
+state-machine regressions in seconds, without opening Studio.
 
 ## What is implemented (spec §12, v0.1 scope)
 
