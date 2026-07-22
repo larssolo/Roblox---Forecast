@@ -5,7 +5,7 @@
 local Config = {}
 
 Config.Round = {
-	MinPlayers = 1, -- lower to 2 for Studio multi-client smoke tests (see README)
+	MinPlayers = 1, -- 1 = solo Studio testing; use 2 with Test → Clients and Servers (see README)
 	MaxPlayers = 15,
 	BriefTime = 15,
 	StylingTime = 210,
@@ -62,8 +62,18 @@ Config.Net = {
 
 -- 12 color buckets (spec §4.1). Names are used for element labels and graybox UI.
 Config.PaletteNames = {
-	"Pink", "Red", "Orange", "Yellow", "Green", "Teal",
-	"Blue", "Purple", "Brown", "Black", "White", "Gray",
+	"Pink",
+	"Red",
+	"Orange",
+	"Yellow",
+	"Green",
+	"Teal",
+	"Blue",
+	"Purple",
+	"Brown",
+	"Black",
+	"White",
+	"Gray",
 }
 
 Config.Palette = {
@@ -94,13 +104,15 @@ Config.Themes = {
 }
 
 -- Editorial cold-start seeds (spec §4.6). key -> initial heat.
-Config.TrendSeeds = ({
-	["tag:y2k"] = 55,
-	["tag:fairycore"] = 48,
-	["tag:sporty"] = 40,
-	["color:1"] = 50, -- Pink
-	["color:10"] = 44, -- Black
-	["color:6"] = 35, -- Teal
-}) :: { [string]: number }
+Config.TrendSeeds = (
+	{
+		["tag:y2k"] = 55,
+		["tag:fairycore"] = 48,
+		["tag:sporty"] = 40,
+		["color:1"] = 50, -- Pink
+		["color:10"] = 44, -- Black
+		["color:6"] = 35, -- Teal
+	}
+) :: { [string]: number }
 
 return Config

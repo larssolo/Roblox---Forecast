@@ -90,10 +90,7 @@ function TrendEngineService.lookMultiplierFor(elements: { ElementKey }): number
 	local ms = {}
 	for _, key in elements do
 		local entry = touch(key)
-		table.insert(
-			ms,
-			TrendMath.elementMultiplier(entry.v, delta24h(entry), isCrashed(entry), Config.Trend)
-		)
+		table.insert(ms, TrendMath.elementMultiplier(entry.v, delta24h(entry), isCrashed(entry), Config.Trend))
 	end
 	return TrendMath.lookMultiplier(ms, Config.Trend)
 end

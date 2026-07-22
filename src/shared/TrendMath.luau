@@ -59,7 +59,8 @@ function TrendMath.elementMultiplier(heat: number, delta24h: number, isCrashed: 
 	if isCrashed then
 		return cfg.CrashFloor
 	end
-	return 1 + cfg.MomentumWeight * TrendMath.momentum(delta24h, cfg)
+	return 1
+		+ cfg.MomentumWeight * TrendMath.momentum(delta24h, cfg)
 		- cfg.SaturationWeight * TrendMath.saturation(heat, cfg)
 end
 
