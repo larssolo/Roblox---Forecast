@@ -157,6 +157,15 @@ local function main()
 	end
 	check("exactly one look is yours", yoursSeen == 1)
 	check("every entrant walked a real outfit", dressed == 5)
+	local itemIds = 0
+	for _, card in runwayCards do
+		for _, entry in card.summary do
+			if type(entry.itemId) == "string" then
+				itemIds += 1
+			end
+		end
+	end
+	check("summary entries carry itemIds (doll renderer input)", itemIds > 0)
 
 	-- 4 bots × 5 looks react (ReactChance=1) + Solo's one valid echo = 21;
 	-- the 🍕 probe must not have been echoed.

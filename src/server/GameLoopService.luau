@@ -106,11 +106,18 @@ local function validateOutfit(player: Player, raw: any): Outfit?
 	return clean
 end
 
--- Runway card payload: icon + color data lets the client render styled cards
--- while avatars remain a TODO (spec §9.8).
-local function outfitSummary(
-	outfit: Outfit
-): { { slot: string, item: string, icon: string, color: string?, colorBucket: number? } }
+-- Runway card payload. itemId + colorBucket let the client draw the look on
+-- the paper doll (DollRenderer); name/icon/color remain for chips and lists.
+local function outfitSummary(outfit: Outfit): {
+	{
+		slot: string,
+		itemId: string,
+		item: string,
+		icon: string,
+		color: string?,
+		colorBucket: number?,
+	}
+}
 	local summary = {}
 	for slotName in BASE_SLOT do
 		local piece = outfit[slotName]
@@ -119,6 +126,7 @@ local function outfitSummary(
 			if def then
 				table.insert(summary, {
 					slot = slotName,
+					itemId = def.id,
 					item = def.name,
 					icon = def.icon,
 					color = piece.colorBucket and Config.PaletteNames[piece.colorBucket] or nil,
@@ -423,7 +431,8 @@ local function runRound()
 	local awards = EconomyService.awardRound(placements, voting.votedSet, betWinners, BetService.getAllPicks())
 
 	-- Public podium: top 3 named. Bottom placements are NEVER listed (spec §6).
-	-- userId lets clients show real avatar headshots (bots are negative → glyph).
+	-- summary lets clients redraw the winning looks on podium dolls (the top 3
+	-- are public once the round ends, so this reveals nothing extra).
 	local podium = {}
 	for i = 1, math.min(3, #scored) do
 		local s = scored[i]
@@ -432,6 +441,7 @@ local function runRound()
 			name = s.look.player.DisplayName,
 			userId = s.look.player.UserId,
 			score = math.floor(s.final * 100) / 100,
+			summary = outfitSummary(s.look.outfit),
 		})
 	end
 

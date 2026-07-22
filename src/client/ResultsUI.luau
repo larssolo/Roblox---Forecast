@@ -11,6 +11,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
+local DollRenderer = require(script.Parent.DollRenderer)
 
 local ResultsUI = {}
 
@@ -81,11 +82,11 @@ local function buildPodium(parent: Instance, entries: { any })
 	local mk = ctxRef.mk
 	local token = renderToken
 
-	-- Tall enough for the winner block + avatar overhang + crown.
+	-- Tall enough for the winner block + the doll standing on it + crown.
 	local strip = mk("Frame", {
 		Name = "Podium",
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1, -16, 0, 232),
+		Size = UDim2.new(1, -16, 0, 300),
 		LayoutOrder = 1,
 		ZIndex = 6,
 	}, parent) :: Frame
@@ -100,7 +101,6 @@ local function buildPodium(parent: Instance, entries: { any })
 			continue
 		end
 		local isWinner = place == 1
-		local userId = tonumber(entry.userId) or 0
 
 		local block = theme.card({
 			Name = `Place{place}`,
@@ -110,48 +110,39 @@ local function buildPodium(parent: Instance, entries: { any })
 			ZIndex = 7,
 		}, strip)
 
-		-- Avatar circle straddles the block's top edge.
-		local avatarSize = isWinner and 54 or 46
-		local portrait: GuiObject
-		if userId > 0 then
-			portrait = mk("ImageLabel", {
-				Image = `rbxthumb://type=AvatarHeadShot&id={userId}&w=100&h=100`,
-				BackgroundColor3 = theme.InkSoft,
-				BorderSizePixel = 0,
-				ZIndex = 9,
-			}, block) :: ImageLabel
-		else
-			-- AI stylists get a sparkle portrait — they are stylists, full stop.
-			portrait = theme.label("💫", {
-				BackgroundTransparency = 0,
-				BackgroundColor3 = theme.InkSoft,
-				TextScaled = false,
-				TextSize = avatarSize - 22,
-				ZIndex = 9,
-			}, block)
+		-- The look itself stands on the block — the podium shows OUTFITS, not text.
+		local dollH = isWinner and 132 or 108
+		local doll = DollRenderer.create(block, {
+			AnchorPoint = Vector2.new(0.5, 1),
+			Position = UDim2.new(0.5, 0, 0, 6),
+			Size = UDim2.fromOffset(math.floor(dollH * 0.62), dollH),
+			ZIndex = 9,
+		})
+		doll.setOutfit(DollRenderer.fromSummary(entry.summary))
+		if isWinner then
+			task.delay(slot.delay + 0.3, function()
+				if doll.frame.Parent and token == renderToken then
+					doll.celebrate()
+				end
+			end)
 		end
-		portrait.AnchorPoint = Vector2.new(0.5, 0.5)
-		portrait.Position = UDim2.new(0.5, 0, 0, 0)
-		portrait.Size = UDim2.fromOffset(avatarSize, avatarSize)
-		theme.corner(portrait, 999)
-		theme.stroke(portrait, isWinner and theme.Gold or theme.Lilac, 2, 0.1)
 
 		if isWinner then
 			theme.label("👑", {
 				TextScaled = false,
 				TextSize = 30,
 				AnchorPoint = Vector2.new(0.5, 1),
-				Position = UDim2.new(0.5, 0, 0, -(avatarSize // 2) - 2),
+				Position = UDim2.new(0.5, 0, 0, -dollH - 2),
 				Size = UDim2.fromOffset(40, 34),
 				Rotation = -10,
-				ZIndex = 9,
+				ZIndex = 10,
 			}, block)
 			theme.label("runway royalty ✨", {
 				Font = theme.FontBody,
 				TextColor3 = theme.TextMid,
 				TextScaled = false,
 				TextSize = 12,
-				Position = UDim2.new(0, 4, 1, -24),
+				Position = UDim2.new(0, 4, 1, -22),
 				Size = UDim2.new(1, -8, 0, 16),
 				ZIndex = 8,
 			}, block)
@@ -164,7 +155,7 @@ local function buildPodium(parent: Instance, entries: { any })
 			TextSize = 14,
 			TextTruncate = Enum.TextTruncate.AtEnd,
 			Size = UDim2.new(1, -8, 0, 18),
-			Position = UDim2.new(0, 4, 0, avatarSize // 2 + 4),
+			Position = UDim2.new(0, 4, 0, 8),
 			ZIndex = 8,
 		}, block)
 
@@ -175,7 +166,7 @@ local function buildPodium(parent: Instance, entries: { any })
 			TextScaled = false,
 			TextSize = isWinner and 26 or 21,
 			Size = UDim2.new(1, -8, 0, 30),
-			Position = UDim2.new(0, 4, 0, avatarSize // 2 + 24),
+			Position = UDim2.new(0, 4, 0, 28),
 			ZIndex = 8,
 		}, block)
 
