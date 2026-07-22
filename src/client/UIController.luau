@@ -130,10 +130,13 @@ local function buildHUD(gui: ScreenGui)
 	}, gui) :: Frame
 	Theme.pad(bar, 14, 8)
 
+	-- Offset past Roblox's top-left CoreGui controls (menu/chat unibar), which
+	-- overlap us because IgnoreGuiInset keeps the bar at the true screen top.
 	Theme.label("FORECAST⚡", {
 		Font = Theme.FontDisplay,
 		TextColor3 = Theme.Pink,
 		TextXAlignment = Enum.TextXAlignment.Left,
+		Position = UDim2.fromOffset(178, 0),
 		Size = UDim2.fromOffset(190, 42),
 		ZIndex = 11,
 	}, bar)
@@ -218,6 +221,10 @@ function UIController.start(bootstrap: any)
 		Name = "ForecastUI",
 		ResetOnSpawn = false,
 		IgnoreGuiInset = true,
+		-- Instance.new ScreenGuis still default to the legacy Global behavior,
+		-- which flat-sorts by ZIndex and lets a panel's background render on top
+		-- of its own children. Every panel is written against Sibling semantics.
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 	}, playerGui) :: ScreenGui
 
 	buildBackdrop(gui)
