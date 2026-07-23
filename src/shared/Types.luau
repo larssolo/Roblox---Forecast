@@ -18,7 +18,8 @@ export type ItemDef = {
 	styleTags: { string },
 	colorable: boolean,
 	icon: string, -- emoji glyph; stands in for thumbnails until real assets land
-	assetId: number, -- 0 = graybox placeholder; replace with real catalog/mesh assets
+	assetId: number, -- 0 = unassigned; a real free catalog asset id dresses the avatar
+	accessoryType: string, -- Enum.AccessoryType name the assetId feeds (Hair/Shirt/Hat/…)
 	priceThreads: number?, -- nil = free starter item
 }
 

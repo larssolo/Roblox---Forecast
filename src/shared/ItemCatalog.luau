@@ -1,13 +1,29 @@
 --!strict
--- Starter catalog (graybox). assetId = 0 everywhere: v0.1 renders outfits as text
--- cards on the runway; real accessories/meshes replace these ids without code changes.
--- All starter items are free (priceThreads = nil) so the round loop is testable
--- before the shop exists (shop = v0.2).
+-- Starter catalog.
+--
+-- assetId = 0 means "no real catalog asset assigned yet": the CharacterViewport
+-- avatar still wears the item's color (body-color blocking) but not its mesh.
+-- To make an item show its real 3D look, paste a FREE Roblox catalog asset id
+-- into assetId (see FORECAST-scaffold-README "Curating free avatar assets").
+-- accessoryType is the Enum.AccessoryType name that id feeds (Hair/Shirt/Hat/…);
+-- it is defaulted per slot below and overridden for specific accessories.
+--
+-- All starter items are free (priceThreads = nil); shop items carry a price.
 
 local Types = require(script.Parent.Types)
 
 type ItemDef = Types.ItemDef
 type Outfit = Types.Outfit
+
+-- Default avatar field per catalog slot (see Enum.AccessoryType).
+local SLOT_ACCESSORY: { [string]: string } = {
+	Hair = "Hair",
+	Top = "Shirt",
+	Bottom = "Pants",
+	Shoes = "LeftShoe", -- CharacterViewport mirrors this to RightShoe
+	Accessory = "Hat",
+	Face = "Face",
+}
 
 local function item(
 	id: string,
@@ -26,6 +42,7 @@ local function item(
 		colorable = colorable,
 		icon = icon,
 		assetId = 0,
+		accessoryType = SLOT_ACCESSORY[slot] or "Hat",
 		priceThreads = nil,
 	}
 end
@@ -98,8 +115,26 @@ local ITEMS: { ItemDef } = {
 	priced("face_stars", "Star Sparkle", "Face", { "fairycore" }, false, "⭐", "Uncommon", 100),
 }
 
+-- Accessory items whose real catalog asset is not a generic Hat: point them at
+-- the right avatar attachment so real ids land in the correct spot later.
+local ACCESSORY_OVERRIDES: { [string]: string } = {
+	acc_wings = "Back",
+	acc_chain = "Neck",
+	acc_scarf = "Neck",
+	acc_pearls = "Neck",
+	acc_choker = "Neck",
+	acc_bow = "Hair",
+	acc_butterfly = "Hair",
+	acc_shades = "Face",
+	acc_halo = "Hat",
+}
+
 local BY_ID: { [string]: ItemDef } = {}
 for _, def in ITEMS do
+	local override = ACCESSORY_OVERRIDES[def.id]
+	if override then
+		def.accessoryType = override
+	end
 	BY_ID[def.id] = def
 end
 

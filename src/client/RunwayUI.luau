@@ -1,8 +1,8 @@
 --!strict
 -- Runway panel: the show itself. ANONYMITY IS LAW (spec §9.8) — the card never
 -- hints at whose look is on stage; every stylist is "Mystery Stylist 🎭". The
--- single exception is payload.yours on YOUR OWN card. Each look struts as a
--- paper doll (DollRenderer) wearing the outfit. One vote per look, no
+-- single exception is payload.yours on YOUR OWN card. Each look struts as a real
+-- R15 avatar (CharacterViewport) wearing the outfit. One vote per look, no
 -- self-votes; the emote bar shares ONE cooldown because Config.Net.Limits.React
 -- is per-remote, not per-emote, and the client must never trip the limiter.
 
@@ -11,7 +11,7 @@ local TweenService = game:GetService("TweenService")
 
 local Net = require(ReplicatedStorage.Shared.Net)
 local Config = require(ReplicatedStorage.Shared.Config)
-local DollRenderer = require(script.Parent.DollRenderer)
+local Avatar = require(script.Parent.CharacterViewport)
 
 local RunwayUI = {}
 
@@ -207,12 +207,12 @@ local function buildCard(stage: Frame, p: any): Frame
 		LayoutOrder = 3,
 		ZIndex = 9,
 	}, card) :: Frame
-	local doll = DollRenderer.create(dollArea, {
+	local doll = Avatar.create(dollArea, {
 		Position = UDim2.fromScale(0.5, 0.5),
 		Size = UDim2.fromScale(1, 0.98),
 		ZIndex = 9,
 	})
-	doll.setOutfit(DollRenderer.fromSummary(summary))
+	doll.setOutfit(Avatar.fromSummary(summary))
 	doll.setWalk(true)
 
 	theme.label(if #summary == 0 then "walked the basics 😳" else iconStrip, {

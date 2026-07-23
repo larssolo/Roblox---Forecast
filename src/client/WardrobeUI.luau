@@ -12,7 +12,7 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Types = require(ReplicatedStorage.Shared.Types)
 local ItemCatalog = require(ReplicatedStorage.Shared.ItemCatalog)
 
-local DollRenderer = require(script.Parent.DollRenderer)
+local Avatar = require(script.Parent.CharacterViewport)
 
 local WardrobeUI = {}
 
@@ -46,7 +46,7 @@ function WardrobeUI.create(ctx: any)
 	local refreshAll: () -> ()
 
 	-- Selection survives show/hide on purpose: the server re-validates anyway.
-	local selection: DollRenderer.DollOutfit = {}
+	local selection: Avatar.DollOutfit = {}
 	local activeSlot = "Hair"
 	local openConfirm: Frame? = nil
 	local pendingSend = false
@@ -139,7 +139,7 @@ function WardrobeUI.create(ctx: any)
 	}, stage) :: Frame
 	theme.corner(podium, 999)
 
-	local doll = DollRenderer.create(stage, {
+	local doll = Avatar.create(stage, {
 		Position = UDim2.fromScale(0.5, 0.49),
 		Size = UDim2.fromScale(1, 0.92),
 		ZIndex = 4,

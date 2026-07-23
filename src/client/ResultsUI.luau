@@ -11,7 +11,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
-local DollRenderer = require(script.Parent.DollRenderer)
+local Avatar = require(script.Parent.CharacterViewport)
 
 local ResultsUI = {}
 
@@ -112,13 +112,13 @@ local function buildPodium(parent: Instance, entries: { any })
 
 		-- The look itself stands on the block — the podium shows OUTFITS, not text.
 		local dollH = isWinner and 132 or 108
-		local doll = DollRenderer.create(block, {
+		local doll = Avatar.create(block, {
 			AnchorPoint = Vector2.new(0.5, 1),
 			Position = UDim2.new(0.5, 0, 0, 6),
 			Size = UDim2.fromOffset(math.floor(dollH * 0.62), dollH),
 			ZIndex = 9,
 		})
-		doll.setOutfit(DollRenderer.fromSummary(entry.summary))
+		doll.setOutfit(Avatar.fromSummary(entry.summary))
 		if isWinner then
 			task.delay(slot.delay + 0.3, function()
 				if doll.frame.Parent and token == renderToken then
