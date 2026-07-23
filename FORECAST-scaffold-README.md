@@ -66,6 +66,27 @@ state-machine regressions in seconds, without opening Studio.
 - Threads/XP/rank economy with placement rewards, non-voter penalty, bet payouts, rank titles
 - Styled client UI for every phase — "editorial paper + electric signal" design system
   (`Theme.luau` + `UIFX.luau`), persistent HUD, full-screen **trend crash takeover**
+- **Live 3D avatar** (`CharacterViewport.luau`): a real R15 character in a `ViewportFrame`,
+  dressed via `HumanoidDescription`, rotating/swaying/walking. It stars in styling (dress her
+  live), struts each runway look, and poses the top-3 on the results podium. Body colors track
+  the item you recolor; hair/clothes/accessories render once catalog items get real asset ids.
+
+## Curating free avatar assets (make items show their real 3D look)
+
+Every catalog item has `assetId` (0 = unassigned) and `accessoryType` in `src/shared/ItemCatalog.luau`.
+With `assetId = 0` the avatar still wears the item's **color**; give it a real **free** Roblox
+catalog asset id and the actual mesh renders on the character. Two-minute harvest, per item:
+
+1. In Studio, open **View → Toolbox → Marketplace** (or the Avatar Shop at `roblox.com/catalog`)
+   and find a **free** (0 Robux) item that matches — e.g. a hair for `hair_bob`.
+2. Get its id: on the web the URL is `roblox.com/catalog/<ID>/name` (the number is the asset id);
+   in the Toolbox, right-click the item → **Copy Asset ID**.
+3. Set that item's `assetId = <ID>` in `ItemCatalog.luau`. Keep `accessoryType` matching the item
+   (`Hair` for hair, `Shirt`/`Pants` for layered clothing, `Hat`/`Face`/`Neck`/`Back` for accessories —
+   already defaulted per slot).
+
+Use free layered-clothing items for tops/bottoms and free accessories/hair — they load in the
+ViewportFrame for everyone. (The avatar APIs are Studio-only, so this can't be scripted from CI.)
 
 ## Deliberate scaffold limitations (read before playtesting for real)
 
@@ -73,7 +94,8 @@ state-machine regressions in seconds, without opening Studio.
 | --- | --- | --- |
 | Profiles are **in-memory only** | `DataService.luau` | Wire [ProfileStore](https://github.com/MadStudioRoblox/ProfileStore) behind the existing interface (spec §9.5) |
 | Trend heat is **per-server** | `TrendEngineService.luau` | Swap storage for MemoryStore HashMap + UpdateAsync lazy decay (spec §9.6) — math stays identical |
-| Runway shows **styled cards**, not avatars | `RunwayUI.luau` / `GameLoopService.outfitSummary` | HumanoidDescription stage rig (spec §9.8); catalog `assetId = 0` placeholders need real assets |
+| Catalog items ship with **`assetId = 0`** | `ItemCatalog.luau` | Paste real free catalog ids (recipe above) so items render their mesh, not just their color |
+| Runway is a **ViewportFrame avatar**, not a 3D world stage | `CharacterViewport.luau` | A real in-world catwalk with camera/lighting is the bigger v0.3 upgrade |
 | No weekly forecast / Oracle board | — | v0.2 (spec §12) |
 
 Everything tunable lives in `src/shared/Config.luau`.
