@@ -141,6 +141,7 @@ local ASSET_IDS: { [string]: number } = {
 	bot_flare = 417457461, -- pants
 	top_crop_tee = 85096965320078, -- "Fire Shirt - B"
 	acc_shades = 376527500, -- glasses (fits Tiny Shades)
+	shoe_sneaker = 126918001982111, -- shoes (fills both feet)
 }
 
 local BY_ID: { [string]: ItemDef } = {}

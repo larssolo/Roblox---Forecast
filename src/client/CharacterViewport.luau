@@ -147,11 +147,13 @@ local function buildDescription(outfit: Outfit): HumanoidDescription
 				if accType then
 					order += 1
 					table.insert(accessories, { AssetId = assetId, AccessoryType = accType, Order = order })
-					if accName == "LeftShoe" then -- one catalog shoe -> a pair
-						local right = accessoryTypeFor("RightShoe")
-						if right then
+					-- One catalog shoe id fills BOTH feet, whichever side it reports.
+					if accName == "LeftShoe" or accName == "RightShoe" then
+						local otherName = if accName == "LeftShoe" then "RightShoe" else "LeftShoe"
+						local other = accessoryTypeFor(otherName)
+						if other then
 							order += 1
-							table.insert(accessories, { AssetId = assetId, AccessoryType = right, Order = order })
+							table.insert(accessories, { AssetId = assetId, AccessoryType = other, Order = order })
 						end
 					end
 				end
