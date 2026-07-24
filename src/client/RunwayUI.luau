@@ -212,7 +212,7 @@ local function buildCard(stage: Frame, p: any): Frame
 		Size = UDim2.fromScale(1, 0.98),
 		ZIndex = 9,
 	})
-	doll.setOutfit(Avatar.fromSummary(summary))
+	doll.setOutfit(Avatar.fromSummary(summary), p.appearance)
 	doll.setWalk(true)
 
 	theme.label(if #summary == 0 then "walked the basics 😳" else iconStrip, {

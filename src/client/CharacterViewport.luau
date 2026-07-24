@@ -27,12 +27,56 @@ local ItemCatalog = require(ReplicatedStorage.Shared.ItemCatalog)
 local CharacterViewport = {}
 
 local BASE_YAW = 180 -- degrees; flip to 0 if the figure faces away from camera
-local SKIN = Color3.fromRGB(246, 208, 178)
-local PANTS_DEFAULT = Color3.fromRGB(70, 62, 90)
+local SKIN = Color3.fromRGB(246, 208, 178) -- fallback if a skin index is missing
 
 export type OutfitPiece = { itemId: string, colorBucket: number? }
 export type Outfit = { [string]: OutfitPiece? }
 export type DollOutfit = Outfit -- back-compat alias for the panels
+export type Appearance = {
+	skin: number,
+	body: number,
+	height: number,
+	face: number,
+	pose: number,
+}
+
+local function defaultAppearance(): Appearance
+	return {
+		skin = Config.Body.DefaultSkin,
+		body = Config.Body.DefaultBody,
+		height = Config.Body.DefaultHeight,
+		face = 0,
+		pose = 1,
+	}
+end
+
+-- Static Motor6D limb offsets per pose name (Config.Poses). Angles are gentle
+-- and TUNABLE — they can't be verified headless, so treat them as a starting
+-- point. Any joint not listed resets to identity when the pose is applied.
+local POSES: { [string]: { [string]: CFrame } } = {
+	Stand = {},
+	Hip = {
+		LeftShoulder = CFrame.Angles(0, 0, math.rad(-38)),
+		LeftElbow = CFrame.Angles(0, 0, math.rad(35)),
+		RightShoulder = CFrame.Angles(math.rad(-8), 0, 0),
+	},
+	Wave = {
+		RightShoulder = CFrame.Angles(0, 0, math.rad(-120)),
+		RightElbow = CFrame.Angles(0, 0, math.rad(25)),
+	},
+	Power = {
+		LeftShoulder = CFrame.Angles(0, 0, math.rad(-26)),
+		RightShoulder = CFrame.Angles(0, 0, math.rad(26)),
+		LeftElbow = CFrame.Angles(0, 0, math.rad(28)),
+		RightElbow = CFrame.Angles(0, 0, math.rad(-28)),
+	},
+	Cutie = {
+		Neck = CFrame.Angles(0, 0, math.rad(13)),
+		RightShoulder = CFrame.Angles(0, 0, math.rad(-42)),
+		RightElbow = CFrame.Angles(0, 0, math.rad(52)),
+	},
+}
+local POSE_JOINTS = { "LeftShoulder", "RightShoulder", "LeftElbow", "RightElbow", "Neck", "LeftHip", "RightHip" }
 
 -- Server RunwayLook/podium summary entries -> the outfit map the avatar dresses
 -- from (same shape the wardrobe keeps locally).
@@ -109,10 +153,11 @@ local function assetTypeId(assetId: number): number
 	return result
 end
 
--- Build a HumanoidDescription from an outfit. YIELDS (asset-type lookups), so
--- callers run it in a spawned, token-guarded thread. Body colors read the
--- Top/Bottom buckets so recoloring shows even before an item has an asset id.
-local function buildDescription(outfit: Outfit): HumanoidDescription
+-- Build a HumanoidDescription from an outfit + appearance. YIELDS (asset-type
+-- lookups), so callers run it in a spawned, token-guarded thread. Body colors
+-- read the Top/Bottom buckets over the chosen skin tone; scales and face come
+-- from the appearance.
+local function buildDescription(outfit: Outfit, appearance: Appearance): HumanoidDescription
 	local desc = Instance.new("HumanoidDescription")
 
 	local topColor: Color3? = nil
@@ -161,13 +206,23 @@ local function buildDescription(outfit: Outfit): HumanoidDescription
 		end
 	end
 
-	desc.HeadColor = SKIN
-	desc.TorsoColor = topColor or SKIN
-	desc.LeftArmColor = topColor or SKIN
-	desc.RightArmColor = topColor or SKIN
-	desc.LeftLegColor = bottomColor or PANTS_DEFAULT
-	desc.RightLegColor = bottomColor or PANTS_DEFAULT
+	local skin = Config.SkinTones[appearance.skin] or SKIN
+	desc.HeadColor = skin
+	desc.TorsoColor = topColor or skin
+	desc.LeftArmColor = topColor or skin
+	desc.RightArmColor = topColor or skin
+	desc.LeftLegColor = bottomColor or skin
+	desc.RightLegColor = bottomColor or skin
 	desc.HeadScale = 1.05 -- gentle chibi-ish flatter
+	desc.HeightScale = appearance.height
+	desc.BodyTypeScale = appearance.body
+	desc.ProportionScale = appearance.body
+	if appearance.face > 0 then
+		local faceId = Config.Faces[appearance.face]
+		if faceId then
+			desc.Face = faceId
+		end
+	end
 
 	if #accessories > 0 then
 		pcall(function()
@@ -261,17 +316,45 @@ function CharacterViewport.create(parent: Instance, props: { [string]: any }?): 
 	end
 
 	local pendingMode = "sway"
+	local queuedOutfit: Outfit = {}
+	local queuedAppearance: Appearance = defaultAppearance()
+	local currentPose = 1
+
+	-- Strike a pose by setting Motor6D limb offsets directly (a ViewportFrame
+	-- doesn't run the Animator, so writing .Transform poses the rig). Unlisted
+	-- joints reset to identity so switching poses is clean.
+	local function findMotor(name: string): Motor6D?
+		if not rig then
+			return nil
+		end
+		for _, d in rig:GetDescendants() do
+			if d:IsA("Motor6D") and d.Name == name then
+				return d
+			end
+		end
+		return nil
+	end
+
+	local function applyPose(index: number)
+		local set = POSES[Config.Poses[index]] or POSES.Stand
+		for _, jointName in POSE_JOINTS do
+			local motor = findMotor(jointName)
+			if motor then
+				motor.Transform = set[jointName] or CFrame.identity
+			end
+		end
+	end
 
 	-- Re-dress in place. Only the latest apply wins (each ApplyDescription yields
 	-- while assets load), so rapid tapping never stacks half-loaded looks.
-	local function applyOutfit(outfit: Outfit)
+	local function applyOutfit()
 		if not humanoid then
 			return
 		end
 		applyToken += 1
 		local token = applyToken
 		task.spawn(function()
-			local desc = buildDescription(outfit) -- yields on asset-type lookups
+			local desc = buildDescription(queuedOutfit, queuedAppearance) -- yields
 			if token ~= applyToken or destroyed then
 				return -- a newer outfit already superseded this one
 			end
@@ -282,12 +365,11 @@ function CharacterViewport.create(parent: Instance, props: { [string]: any }?): 
 				end)
 			end
 			if token == applyToken and not destroyed then
+				applyPose(currentPose) -- ApplyDescription rebuilds limbs -> re-pose
 				frameCamera()
 			end
 		end)
 	end
-
-	local queuedOutfit: Outfit = {}
 
 	-- Build the base rig once (yields on asset load); dress to the queued outfit
 	-- when ready. Guarded so a destroy mid-load cleans up.
@@ -313,14 +395,25 @@ function CharacterViewport.create(parent: Instance, props: { [string]: any }?): 
 		model:PivotTo(baseCFrame * CFrame.Angles(0, math.rad(BASE_YAW), 0))
 		model.Parent = worldModel
 		frameCamera()
-		applyOutfit(queuedOutfit)
+		applyOutfit()
 		startMotion(pendingMode)
 	end)
 
-	function self.setOutfit(outfit: Outfit?)
+	function self.setOutfit(outfit: Outfit?, appearance: Appearance?)
 		queuedOutfit = outfit or {}
+		if appearance then
+			queuedAppearance = appearance
+			currentPose = math.clamp(math.floor(tonumber(appearance.pose) or 1), 1, #Config.Poses)
+		end
 		if humanoid then
-			applyOutfit(queuedOutfit)
+			applyOutfit()
+		end
+	end
+
+	function self.setPose(index: number)
+		currentPose = math.clamp(math.floor(index), 1, #Config.Poses)
+		if rig then
+			applyPose(currentPose)
 		end
 	end
 

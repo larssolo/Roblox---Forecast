@@ -46,6 +46,15 @@ export type OutfitPiece = {
 -- enforced at runtime by GameLoopService.validateOutfit anyway.
 export type Outfit = { [string]: OutfitPiece? }
 
+-- Avatar body customization that travels with a look (server-validated).
+export type Appearance = {
+	skin: number, -- index into Config.SkinTones
+	body: number, -- 0..1 body type (blocky -> slim)
+	height: number, -- Config.Body.HeightMin..HeightMax
+	face: number, -- 0 = default face, else index into Config.Faces
+	pose: number, -- index into Config.Poses
+}
+
 -- "item:crop_01" | "tag:y2k" | "color:7"
 export type ElementKey = string
 

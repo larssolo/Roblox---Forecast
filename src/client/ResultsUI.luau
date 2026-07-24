@@ -118,7 +118,7 @@ local function buildPodium(parent: Instance, entries: { any })
 			Size = UDim2.fromOffset(math.floor(dollH * 0.62), dollH),
 			ZIndex = 9,
 		})
-		doll.setOutfit(Avatar.fromSummary(entry.summary))
+		doll.setOutfit(Avatar.fromSummary(entry.summary), entry.appearance)
 		if isWinner then
 			task.delay(slot.delay + 0.3, function()
 				if doll.frame.Parent and token == renderToken then

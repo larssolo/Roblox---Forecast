@@ -103,6 +103,38 @@ Config.RankTitles = {
 	{ rank = 40, title = "Fashion Legend" },
 }
 
+-- Avatar body customization (the figure itself, beyond swapping clothes). The
+-- server clamps every value; `face` is an INDEX into Config.Faces, never a raw
+-- asset id from the client (a griefer could otherwise inject a moderated decal).
+Config.SkinTones = {
+	Color3.fromRGB(255, 227, 201),
+	Color3.fromRGB(245, 208, 178),
+	Color3.fromRGB(230, 184, 148),
+	Color3.fromRGB(205, 154, 116),
+	Color3.fromRGB(174, 122, 88),
+	Color3.fromRGB(132, 90, 62),
+	Color3.fromRGB(96, 64, 45),
+	Color3.fromRGB(64, 43, 33),
+}
+
+-- Free classic face decal asset ids (harvest like ItemCatalog assets). Index 0
+-- in an Appearance means "keep the default face"; 1..#Faces pick from here.
+Config.Faces = ({}) :: { number }
+
+Config.Body = {
+	HeightMin = 0.92,
+	HeightMax = 1.08,
+	DefaultSkin = 2,
+	DefaultBody = 0.3, -- 0 = classic blocky, 1 = slim/Rthro
+	DefaultHeight = 1.0,
+	BodyStep = 0.2, -- stepper granularity for the body/height controls
+	HeightStep = 0.04,
+}
+
+-- Runway/podium poses (client renders them from Motor6D; server just stores the
+-- chosen index so it travels with the look).
+Config.Poses = { "Stand", "Hip", "Wave", "Power", "Cutie" }
+
 -- Per-remote rate limits (spec §9.4/§9.7). Enforced server-side in Net + AntiAbuse.
 Config.Net = {
 	Limits = {

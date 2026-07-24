@@ -167,6 +167,27 @@ local function main()
 	end
 	check("summary entries carry itemIds (doll renderer input)", itemIds > 0)
 
+	-- Every look carries a valid, server-clamped appearance (bots get random ones).
+	local appOk = true
+	for _, card in runwayCards do
+		local a = card.appearance
+		if
+			type(a) ~= "table"
+			or type(a.skin) ~= "number"
+			or a.skin < 1
+			or a.skin > #Config.SkinTones
+			or type(a.pose) ~= "number"
+			or a.pose < 1
+			or a.pose > #Config.Poses
+			or type(a.height) ~= "number"
+			or a.height < Config.Body.HeightMin
+			or a.height > Config.Body.HeightMax
+		then
+			appOk = false
+		end
+	end
+	check("every look carries a valid clamped appearance", appOk)
+
 	-- 4 bots × 5 looks react (ReactChance=1) + Solo's one valid echo = 21;
 	-- the 🍕 probe must not have been echoed.
 	check("reactions echo (bots + you), invalid glyph dropped", reactionCount == 21, `got {reactionCount}`)
