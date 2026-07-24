@@ -129,11 +129,30 @@ local ACCESSORY_OVERRIDES: { [string]: string } = {
 	acc_halo = "Hat",
 }
 
+-- Real free Roblox catalog asset ids (from the item's catalog url). The avatar
+-- auto-detects each id's real type at runtime, so only the number matters here.
+-- Add more with the recipe in FORECAST-scaffold-README ("Curating free avatar
+-- assets"). Bundles (roblox.com/bundles/…) are NOT single assets — use a catalog
+-- item url (roblox.com/catalog/…) instead.
+local ASSET_IDS: { [string]: number } = {
+	hair_bob = 1772336109, -- "Down to Earth Hair"
+	hair_long_waves = 451221329, -- hair
+	bot_cargo = 6984740059, -- "Cargo Pants - Brown"
+	bot_flare = 417457461, -- pants
+	top_crop_tee = 85096965320078, -- "Fire Shirt - B"
+	acc_shades = 376527500, -- glasses (fits Tiny Shades)
+	shoe_sneaker = 126918001982111, -- shoes (fills both feet)
+}
+
 local BY_ID: { [string]: ItemDef } = {}
 for _, def in ITEMS do
 	local override = ACCESSORY_OVERRIDES[def.id]
 	if override then
 		def.accessoryType = override
+	end
+	local assetId = ASSET_IDS[def.id]
+	if assetId then
+		def.assetId = assetId
 	end
 	BY_ID[def.id] = def
 end

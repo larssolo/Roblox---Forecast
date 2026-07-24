@@ -18,6 +18,7 @@
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local MarketplaceService = game:GetService("MarketplaceService")
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Shared.Config)
@@ -61,15 +62,61 @@ local function accessoryTypeFor(name: string?): EnumItem?
 	return if ok then value else nil
 end
 
--- Build a HumanoidDescription from an outfit. Body colors read the Top/Bottom
--- color buckets so recoloring an item recolors the avatar even before any
--- clothing asset exists; real accessory/clothing assets (assetId > 0) layer on
--- top via SetAccessories.
-local function describe(outfit: Outfit): HumanoidDescription
+-- AssetTypeId -> how to wear it. `clothing` = a HumanoidDescription clothing
+-- field (classic Shirt/Pants/T-shirt); `acc` = an Enum.AccessoryType name for
+-- SetAccessories (rigid + layered). Covers everything a catalog url can be.
+local ROUTE: { [number]: { clothing: string?, acc: string? } } = {
+	[2] = { clothing = "GraphicTShirt" },
+	[11] = { clothing = "Shirt" },
+	[12] = { clothing = "Pants" },
+	[8] = { acc = "Hat" },
+	[41] = { acc = "Hair" },
+	[42] = { acc = "Face" },
+	[43] = { acc = "Neck" },
+	[44] = { acc = "Shoulder" },
+	[45] = { acc = "Front" },
+	[46] = { acc = "Back" },
+	[47] = { acc = "Waist" },
+	[64] = { acc = "TShirt" },
+	[65] = { acc = "Shirt" },
+	[66] = { acc = "Pants" },
+	[67] = { acc = "Jacket" },
+	[68] = { acc = "Sweater" },
+	[69] = { acc = "Shorts" },
+	[70] = { acc = "LeftShoe" },
+	[71] = { acc = "RightShoe" },
+	[72] = { acc = "DressSkirt" },
+}
+
+local typeCache: { [number]: number } = {} -- assetId -> AssetTypeId (0 = lookup failed)
+
+-- Ask Roblox what an asset actually is, so any pasted catalog id routes to the
+-- right slot without the catalog having to declare its type. Yields; cached
+-- across every avatar instance.
+local function assetTypeId(assetId: number): number
+	local cached = typeCache[assetId]
+	if cached ~= nil then
+		return cached
+	end
+	local result = 0
+	local ok, info = pcall(function()
+		return MarketplaceService:GetProductInfo(assetId, Enum.InfoType.Asset)
+	end)
+	if ok and typeof(info) == "table" and typeof((info :: any).AssetTypeId) == "number" then
+		result = (info :: any).AssetTypeId
+	end
+	typeCache[assetId] = result
+	return result
+end
+
+-- Build a HumanoidDescription from an outfit. YIELDS (asset-type lookups), so
+-- callers run it in a spawned, token-guarded thread. Body colors read the
+-- Top/Bottom buckets so recoloring shows even before an item has an asset id.
+local function buildDescription(outfit: Outfit): HumanoidDescription
 	local desc = Instance.new("HumanoidDescription")
 
-	local topColor = nil
-	local bottomColor = nil
+	local topColor: Color3? = nil
+	local bottomColor: Color3? = nil
 	local accessories: { any } = {}
 	local order = 0
 
@@ -89,16 +136,25 @@ local function describe(outfit: Outfit): HumanoidDescription
 
 		local assetId = tonumber(def.assetId) or 0
 		if assetId > 0 then
-			local accType = accessoryTypeFor(def.accessoryType)
-			if accType then
-				order += 1
-				table.insert(accessories, { AssetId = assetId, AccessoryType = accType, Order = order })
-				-- Shoes come as a left/right pair from one catalog item.
-				if def.accessoryType == "LeftShoe" then
-					local right = accessoryTypeFor("RightShoe")
-					if right then
-						order += 1
-						table.insert(accessories, { AssetId = assetId, AccessoryType = right, Order = order })
+			local route = ROUTE[assetTypeId(assetId)]
+			if route and route.clothing then
+				(desc :: any)[route.clothing] = assetId
+			else
+				-- Detected accessory type, or the item's declared type if the
+				-- lookup failed (offline / studio hiccup).
+				local accName = (route and route.acc) or def.accessoryType
+				local accType = accessoryTypeFor(accName)
+				if accType then
+					order += 1
+					table.insert(accessories, { AssetId = assetId, AccessoryType = accType, Order = order })
+					-- One catalog shoe id fills BOTH feet, whichever side it reports.
+					if accName == "LeftShoe" or accName == "RightShoe" then
+						local otherName = if accName == "LeftShoe" then "RightShoe" else "LeftShoe"
+						local other = accessoryTypeFor(otherName)
+						if other then
+							order += 1
+							table.insert(accessories, { AssetId = assetId, AccessoryType = other, Order = order })
+						end
 					end
 				end
 			end
@@ -114,12 +170,9 @@ local function describe(outfit: Outfit): HumanoidDescription
 	desc.HeadScale = 1.05 -- gentle chibi-ish flatter
 
 	if #accessories > 0 then
-		local ok = pcall(function()
+		pcall(function()
 			desc:SetAccessories(accessories, true)
 		end)
-		if not ok then
-			-- older API / bad asset: fall back to bare description, never error
-		end
 	end
 	return desc
 end
@@ -212,17 +265,22 @@ function CharacterViewport.create(parent: Instance, props: { [string]: any }?): 
 	-- Re-dress in place. Only the latest apply wins (each ApplyDescription yields
 	-- while assets load), so rapid tapping never stacks half-loaded looks.
 	local function applyOutfit(outfit: Outfit)
-		local h = humanoid
-		if not h then
+		if not humanoid then
 			return
 		end
 		applyToken += 1
 		local token = applyToken
-		local desc = describe(outfit)
 		task.spawn(function()
-			pcall(function()
-				h:ApplyDescription(desc)
-			end)
+			local desc = buildDescription(outfit) -- yields on asset-type lookups
+			if token ~= applyToken or destroyed then
+				return -- a newer outfit already superseded this one
+			end
+			local h = humanoid
+			if h then
+				pcall(function()
+					h:ApplyDescription(desc)
+				end)
+			end
 			if token == applyToken and not destroyed then
 				frameCamera()
 			end
