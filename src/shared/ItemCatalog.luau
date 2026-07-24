@@ -136,8 +136,11 @@ local ACCESSORY_OVERRIDES: { [string]: string } = {
 -- item url (roblox.com/catalog/…) instead.
 local ASSET_IDS: { [string]: number } = {
 	hair_bob = 1772336109, -- "Down to Earth Hair"
+	hair_long_waves = 451221329, -- hair
 	bot_cargo = 6984740059, -- "Cargo Pants - Brown"
+	bot_flare = 417457461, -- pants
 	top_crop_tee = 85096965320078, -- "Fire Shirt - B"
+	acc_shades = 376527500, -- glasses (fits Tiny Shades)
 }
 
 local BY_ID: { [string]: ItemDef } = {}
