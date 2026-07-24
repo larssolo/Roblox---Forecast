@@ -73,20 +73,21 @@ state-machine regressions in seconds, without opening Studio.
 
 ## Curating free avatar assets (make items show their real 3D look)
 
-Every catalog item has `assetId` (0 = unassigned) and `accessoryType` in `src/shared/ItemCatalog.luau`.
-With `assetId = 0` the avatar still wears the item's **color**; give it a real **free** Roblox
-catalog asset id and the actual mesh renders on the character. Two-minute harvest, per item:
+With `assetId = 0` the avatar still wears the item's **color**; give it a real Roblox catalog
+asset id and the actual mesh renders on the character. The avatar **auto-detects each id's type**
+at runtime (`MarketplaceService:GetProductInfo`) and routes it correctly — classic Shirt/Pants,
+layered clothing, hair, hat, accessory — so **you only need the number**, nothing else. Per item:
 
-1. In Studio, open **View → Toolbox → Marketplace** (or the Avatar Shop at `roblox.com/catalog`)
-   and find a **free** (0 Robux) item that matches — e.g. a hair for `hair_bob`.
-2. Get its id: on the web the URL is `roblox.com/catalog/<ID>/name` (the number is the asset id);
-   in the Toolbox, right-click the item → **Copy Asset ID**.
-3. Set that item's `assetId = <ID>` in `ItemCatalog.luau`. Keep `accessoryType` matching the item
-   (`Hair` for hair, `Shirt`/`Pants` for layered clothing, `Hat`/`Face`/`Neck`/`Back` for accessories —
-   already defaulted per slot).
+1. Open the item's catalog page and copy the number from the url:
+   `roblox.com/catalog/`**`1772336109`**`/Down-to-Earth-Hair`. (In Studio: right-click a Toolbox
+   item → **Copy Asset ID**.) It must be a **catalog item** (`/catalog/…`) — a **bundle**
+   (`/bundles/…`, e.g. classic shoe sets) is a package of parts, not a single asset, and won't wire in.
+2. Add it to the `ASSET_IDS` map in `src/shared/ItemCatalog.luau`, keyed by item id:
+   `top_crop_tee = 85096965320078,`
 
-Use free layered-clothing items for tops/bottoms and free accessories/hair — they load in the
-ViewportFrame for everyone. (The avatar APIs are Studio-only, so this can't be scripted from CI.)
+Already wired (Lars's picks): `hair_bob` = Down-to-Earth Hair, `bot_cargo` = Cargo Pants Brown,
+`top_crop_tee` = Fire Shirt B. Equip those three together in styling to see the full effect.
+(The avatar APIs are Studio-only, so this can't be scripted from CI — hence the manual map.)
 
 ## Deliberate scaffold limitations (read before playtesting for real)
 
