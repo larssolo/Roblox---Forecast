@@ -74,6 +74,11 @@ state-machine regressions in seconds, without opening Studio.
   runway pose. Each field is a server-clamped `Types.Appearance` that travels with the look,
   so everyone sees your body on the runway/podium. `face` is an **index into `Config.Faces`**
   (never a raw client-supplied decal id); add free classic-face ids there to fill the picker.
+- **Primitive wardrobe** (`PrimitiveWardrobe.luau`): any item WITHOUT a real catalog asset id
+  is still drawn in 3D from Roblox primitives (blocks/balls/wedges) hung on the avatar and
+  palette-colored — so every one of the 42 items shows something on the figure. A real asset id
+  on an item overrides its primitive with the proper mesh. Offsets are authored blind and need a
+  Studio tuning pass (`BACK` flips front/back).
 
 ## Curating free avatar assets (make items show their real 3D look)
 

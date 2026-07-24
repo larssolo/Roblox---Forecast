@@ -23,6 +23,7 @@ local MarketplaceService = game:GetService("MarketplaceService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Shared.Config)
 local ItemCatalog = require(ReplicatedStorage.Shared.ItemCatalog)
+local PrimitiveWardrobe = require(script.Parent.PrimitiveWardrobe)
 
 local CharacterViewport = {}
 
@@ -270,6 +271,16 @@ function CharacterViewport.create(parent: Instance, props: { [string]: any }?): 
 	local renderConn: RBXScriptConnection? = nil
 	local destroyed = false
 
+	-- Primitive clothing/hair/shoes for items with no real mesh. Anchored parts
+	-- in the WorldModel, re-seated onto their body part every render frame.
+	local clothingParts: { PrimitiveWardrobe.Attachment } = {}
+	local function clearClothing()
+		for _, c in clothingParts do
+			c.part:Destroy()
+		end
+		table.clear(clothingParts)
+	end
+
 	local function frameCamera()
 		local model = rig
 		if not model or not model.PrimaryPart then
@@ -312,6 +323,13 @@ function CharacterViewport.create(parent: Instance, props: { [string]: any }?): 
 			end
 			local cf = baseCFrame * CFrame.new(0, bob, 0) * CFrame.Angles(0, math.rad(BASE_YAW + yaw), 0)
 			rig:PivotTo(cf)
+			-- Re-seat primitive clothing onto its body part (physics-free).
+			for _, c in clothingParts do
+				local bp = rig:FindFirstChild(c.bodyPart)
+				if bp and bp:IsA("BasePart") then
+					c.part.CFrame = bp.CFrame * c.offset
+				end
+			end
 		end)
 	end
 
@@ -366,6 +384,10 @@ function CharacterViewport.create(parent: Instance, props: { [string]: any }?): 
 			end
 			if token == applyToken and not destroyed then
 				applyPose(currentPose) -- ApplyDescription rebuilds limbs -> re-pose
+				clearClothing()
+				if rig then
+					clothingParts = PrimitiveWardrobe.dress(rig, worldModel, queuedOutfit)
+				end
 				frameCamera()
 			end
 		end)
@@ -459,6 +481,7 @@ function CharacterViewport.create(parent: Instance, props: { [string]: any }?): 
 			renderConn:Disconnect()
 			renderConn = nil
 		end
+		clearClothing()
 		frame:Destroy()
 	end
 
