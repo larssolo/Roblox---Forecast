@@ -271,8 +271,9 @@ local function main()
 
 	task.wait(0.4)
 	check("still STYLING at t+0.4", GameLoop.getState() == "STYLING")
-	-- Fresh rate-limit window: the real outfit replaces the decoy now.
-	H.fireServer("SubmitOutfit", Ava, AVA_OUTFIT)
+	-- Fresh rate-limit window: the real outfit replaces the decoy now. The
+	-- appearance is deliberately out of range — the server must clamp every field.
+	H.fireServer("SubmitOutfit", Ava, AVA_OUTFIT, { skin = 999, body = 5, height = 99, face = 999, pose = 999 })
 	H.fireServer("SubmitOutfit", Cle, { Hair = { itemId = "shoe_sneaker" } }) -- wrong slot
 	H.removePlayer(Eli) -- leaves before looks are built → no runway walk
 
@@ -328,6 +329,14 @@ local function main()
 		hasItem(avaYours.summary, "Space Buns") and hasItem(avaYours.summary, "Crop Tee")
 	)
 	check("the dropped decoy never reached the runway", not hasItem(avaYours.summary, "Oversized Hoodie"))
+	check(
+		"server clamped Ava's out-of-range appearance",
+		avaYours.appearance.skin == #Config.SkinTones
+			and avaYours.appearance.pose == #Config.Poses
+			and avaYours.appearance.height == Config.Body.HeightMax
+			and avaYours.appearance.face == #Config.Faces
+			and avaYours.appearance.body == 1
+	)
 	local pinkOnCard = false
 	for _, entry in avaYours.summary do
 		if entry.color == "Pink" then

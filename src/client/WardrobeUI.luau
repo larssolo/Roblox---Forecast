@@ -47,7 +47,15 @@ function WardrobeUI.create(ctx: any)
 
 	-- Selection survives show/hide on purpose: the server re-validates anyway.
 	local selection: Avatar.DollOutfit = {}
-	local activeSlot = "Hair"
+	local appearance = {
+		skin = Config.Body.DefaultSkin,
+		body = Config.Body.DefaultBody,
+		height = Config.Body.DefaultHeight,
+		face = 0,
+		pose = 1,
+	}
+	local activeSlot = "Hair" -- a slot name, or "Me" for the customization panel
+	local refreshMe: () -> ()
 	local openConfirm: Frame? = nil
 	local pendingSend = false
 	local lastSend = 0
@@ -168,12 +176,12 @@ function WardrobeUI.create(ctx: any)
 		local tab = mk("TextButton", {
 			Text = theme.slotIcon(slot.name),
 			Font = theme.FontDisplay,
-			TextSize = 20,
+			TextSize = 19,
 			AutoButtonColor = false,
 			BackgroundColor3 = theme.InkLine,
 			BackgroundTransparency = 0.55,
 			BorderSizePixel = 0,
-			Size = UDim2.new(1 / 7, -5, 1, 0),
+			Size = UDim2.new(1 / 8, -5, 1, 0),
 			LayoutOrder = order,
 		}, tabBar) :: TextButton
 		theme.corner(tab, 14)
@@ -193,6 +201,23 @@ function WardrobeUI.create(ctx: any)
 			setActiveSlot(slot.name)
 		end)
 	end
+	-- 8th tab: customize the figure herself (skin / body / face / pose).
+	local meTab = mk("TextButton", {
+		Text = "💃",
+		Font = theme.FontDisplay,
+		TextSize = 19,
+		AutoButtonColor = false,
+		BackgroundColor3 = theme.Purple,
+		BackgroundTransparency = 0.35,
+		BorderSizePixel = 0,
+		Size = UDim2.new(1 / 8, -5, 1, 0),
+		LayoutOrder = 8,
+	}, tabBar) :: TextButton
+	theme.corner(meTab, 14)
+	tabs["Me"] = meTab
+	meTab.Activated:Connect(function()
+		setActiveSlot("Me")
+	end)
 
 	local colorRow = mk("Frame", {
 		BackgroundTransparency = 1,
@@ -253,6 +278,143 @@ function WardrobeUI.create(ctx: any)
 	}, gridScroll)
 	theme.pad(gridScroll, 4, 4)
 
+	-- ============================ customize (Me) panel ============================
+
+	local meFrame = mk("ScrollingFrame", {
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Position = UDim2.new(0, 0, 0, 50),
+		Size = UDim2.new(1, 0, 1, -50),
+		CanvasSize = UDim2.new(),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		ScrollBarThickness = 4,
+		ScrollBarImageColor3 = theme.Purple,
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+		Visible = false,
+	}, rightCol) :: ScrollingFrame
+	mk("UIListLayout", { Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder }, meFrame)
+	theme.pad(meFrame, 4, 4)
+
+	local applyAppearance: () -> ()
+
+	local function sectionLabel(text: string, order: number)
+		theme.label(text, {
+			Font = theme.FontHead,
+			TextColor3 = theme.TextFaint,
+			TextScaled = false,
+			TextSize = 13,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Size = UDim2.new(1, 0, 0, 18),
+			LayoutOrder = order,
+		}, meFrame)
+	end
+
+	-- SKIN: a row of tone swatches
+	sectionLabel("SKIN", 1)
+	local skinRow = mk("ScrollingFrame", {
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0, 42),
+		CanvasSize = UDim2.new(),
+		AutomaticCanvasSize = Enum.AutomaticSize.X,
+		ScrollBarThickness = 3,
+		ScrollBarImageColor3 = theme.Purple,
+		ScrollingDirection = Enum.ScrollingDirection.X,
+		LayoutOrder = 2,
+	}, meFrame) :: ScrollingFrame
+	mk("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+		Padding = UDim.new(0, 6),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, skinRow)
+	local skinStrokes: { UIStroke } = {}
+	for index, tone in Config.SkinTones do
+		local sw = mk("TextButton", {
+			Text = "",
+			AutoButtonColor = false,
+			BackgroundColor3 = tone,
+			BorderSizePixel = 0,
+			Size = UDim2.fromOffset(38, 38),
+			LayoutOrder = index,
+		}, skinRow) :: TextButton
+		theme.corner(sw, 999)
+		skinStrokes[index] = theme.stroke(sw, theme.TextDark, 2, 0.6)
+		sw.Activated:Connect(function()
+			appearance.skin = index
+			applyAppearance()
+		end)
+	end
+
+	-- Reusable −/+ stepper row. onStep(dir) mutates state; returns readout text.
+	local function stepper(title: string, order: number, onStep: (dir: number) -> string): TextLabel
+		local row = mk("Frame", {
+			BackgroundTransparency = 1,
+			Size = UDim2.new(1, 0, 0, 40),
+			LayoutOrder = order,
+		}, meFrame) :: Frame
+		theme.label(title, {
+			Font = theme.FontBold,
+			TextColor3 = theme.TextLight,
+			TextScaled = false,
+			TextSize = 14,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Size = UDim2.new(0.36, 0, 1, 0),
+		}, row)
+		local minus = theme.button("−", {
+			TextSize = 20,
+			Position = UDim2.new(0.4, 0, 0.5, -18),
+			Size = UDim2.fromOffset(40, 36),
+			AnchorPoint = Vector2.new(0, 0),
+		}, row)
+		local readout = theme.label("", {
+			Font = theme.FontDisplay,
+			TextColor3 = theme.TextLight,
+			TextScaled = false,
+			TextSize = 15,
+			Position = UDim2.new(0.4, 44, 0, 0),
+			Size = UDim2.new(0.6, -92, 1, 0),
+		}, row)
+		local plus = theme.button("+", {
+			TextSize = 20,
+			AnchorPoint = Vector2.new(1, 0),
+			Position = UDim2.new(1, 0, 0.5, -18),
+			Size = UDim2.fromOffset(40, 36),
+		}, row)
+		minus.Activated:Connect(function()
+			readout.Text = onStep(-1)
+			applyAppearance()
+		end)
+		plus.Activated:Connect(function()
+			readout.Text = onStep(1)
+			applyAppearance()
+		end)
+		return readout
+	end
+
+	local heightReadout = stepper("Height", 3, function(dir)
+		appearance.height =
+			math.clamp(appearance.height + dir * Config.Body.HeightStep, Config.Body.HeightMin, Config.Body.HeightMax)
+		return `{math.floor((appearance.height / Config.Body.DefaultHeight) * 100 + 0.5)}%`
+	end)
+	local bodyReadout = stepper("Body", 4, function(dir)
+		appearance.body = math.clamp(appearance.body + dir * Config.Body.BodyStep, 0, 1)
+		return if appearance.body < 0.34 then "Classic" elseif appearance.body < 0.67 then "Balanced" else "Slim"
+	end)
+	local faceReadout = stepper("Face", 5, function(dir)
+		local n = #Config.Faces
+		appearance.face = (appearance.face + dir) % (n + 1)
+		if appearance.face < 0 then
+			appearance.face += n + 1
+		end
+		return if appearance.face == 0 then "Default" else `Face {appearance.face}`
+	end)
+	local poseReadout = stepper("Pose", 6, function(dir)
+		local n = #Config.Poses
+		appearance.pose = ((appearance.pose - 1 + dir) % n) + 1
+		return Config.Poses[appearance.pose]
+	end)
+
 	-- ============================ logic ============================
 
 	local function setStatus(text: string, color: Color3?)
@@ -299,7 +461,8 @@ function WardrobeUI.create(ctx: any)
 	end
 
 	-- Single pending timer keeps us under the SubmitOutfit limit while making
-	-- sure the latest state ships (buildOutfit runs at fire time).
+	-- sure the latest state ships (buildOutfit runs at fire time). Appearance
+	-- rides along so the body customization travels with the look.
 	local function send()
 		if pendingSend then
 			return
@@ -310,7 +473,7 @@ function WardrobeUI.create(ctx: any)
 		task.delay(delay, function()
 			pendingSend = false
 			lastSend = os.clock()
-			Net.fireServer("SubmitOutfit", buildOutfit())
+			Net.fireServer("SubmitOutfit", buildOutfit(), table.clone(appearance))
 			setStatus("look sent ✓", theme.Mint)
 		end)
 	end
@@ -323,14 +486,40 @@ function WardrobeUI.create(ctx: any)
 	end
 
 	local function redrawDoll(celebrate: boolean?)
-		doll.setOutfit(selection)
+		doll.setOutfit(selection, table.clone(appearance))
 		if celebrate then
 			doll.bounce()
 			fx.sparkle(stage, 7)
 		end
 	end
 
+	-- Repaint her from the body controls, ship it, refresh the readouts.
+	applyAppearance = function()
+		doll.setOutfit(selection, table.clone(appearance))
+		doll.setPose(appearance.pose)
+		fx.sparkle(stage, 5)
+		send()
+		refreshMe()
+	end
+
+	refreshMe = function()
+		for index, stroke in skinStrokes do
+			local sel = index == appearance.skin
+			stroke.Color = if sel then Color3.new(1, 1, 1) else theme.TextDark
+			stroke.Thickness = if sel then 3 else 2
+			stroke.Transparency = if sel then 0 else 0.6
+		end
+		heightReadout.Text = `{math.floor((appearance.height / Config.Body.DefaultHeight) * 100 + 0.5)}%`
+		bodyReadout.Text = if appearance.body < 0.34
+			then "Classic"
+			elseif appearance.body < 0.67 then "Balanced"
+			else "Slim"
+		faceReadout.Text = if appearance.face == 0 then "Default" else `Face {appearance.face}`
+		poseReadout.Text = Config.Poses[appearance.pose]
+	end
+
 	local function refreshTabs()
+		local meActive = activeSlot == "Me"
 		for _, slot in OUTFIT_SLOTS do
 			local tab = tabs[slot.name]
 			local active = slot.name == activeSlot
@@ -338,9 +527,26 @@ function WardrobeUI.create(ctx: any)
 			tab.BackgroundTransparency = if active then 0 else 0.55
 			tabDots[slot.name].Visible = selection[slot.name] ~= nil and not active
 		end
+		meTab.BackgroundColor3 = if meActive then theme.Pink else theme.Purple
+		meTab.BackgroundTransparency = if meActive then 0 else 0.35
+	end
+
+	-- Swap the right column between the item grid and the customize panel.
+	local function setPanelMode()
+		local meActive = activeSlot == "Me"
+		meFrame.Visible = meActive
+		gridScroll.Visible = not meActive
+		if meActive then
+			colorRow.Visible = false
+			refreshMe()
+		end
 	end
 
 	local function updateColorRow()
+		if activeSlot == "Me" then
+			colorRow.Visible = false
+			return
+		end
 		local def = equippedDef(activeSlot)
 		local colorable = def ~= nil and def.colorable == true
 		colorRow.Visible = colorable
@@ -571,6 +777,9 @@ function WardrobeUI.create(ctx: any)
 	end
 
 	local function rebuildGrid(keepScroll: boolean)
+		if activeSlot == "Me" then
+			return -- the customize panel occupies the right column instead
+		end
 		closeConfirm()
 		local canvasPos = gridScroll.CanvasPosition
 		for _, child in gridScroll:GetChildren() do
@@ -590,6 +799,7 @@ function WardrobeUI.create(ctx: any)
 		refreshTabs()
 		rebuildGrid(true)
 		updateColorRow()
+		setPanelMode()
 	end
 
 	setActiveSlot = function(slotName: string)
@@ -601,6 +811,7 @@ function WardrobeUI.create(ctx: any)
 		refreshTabs()
 		rebuildGrid(false)
 		updateColorRow()
+		setPanelMode()
 		fx.pulse(tabs[slotName], 0.1)
 	end
 

@@ -33,16 +33,54 @@ local GameLoopService = {}
 local state: RoundState = "LOBBY"
 local stateEndsAt = 0
 
+type Appearance = Types.Appearance
 type RoundData = {
 	theme: string,
 	themeTags: { [string]: boolean },
 	participants: { [Entrant]: boolean },
-	outfits: { [Entrant]: { outfit: Outfit, order: number } },
+	outfits: { [Entrant]: { outfit: Outfit, order: number, appearance: Appearance } },
 	nextOrder: number,
 	candidates: { ElementKey },
 	lookOwner: { [string]: Entrant },
 }
 local round: RoundData? = nil
+
+-- Server-authoritative avatar customization. Always returns a valid Appearance
+-- (defaults for anything missing/out of range). `face` is clamped to an INDEX
+-- into Config.Faces — the client can never inject a raw decal id (spec §9.7).
+local function defaultAppearance(): Appearance
+	return {
+		skin = Config.Body.DefaultSkin,
+		body = Config.Body.DefaultBody,
+		height = Config.Body.DefaultHeight,
+		face = 0,
+		pose = 1,
+	}
+end
+
+local function validateAppearance(raw: any): Appearance
+	local out = defaultAppearance()
+	if typeof(raw) ~= "table" then
+		return out
+	end
+	local a = raw :: { [string]: any }
+	if typeof(a.skin) == "number" then
+		out.skin = math.clamp(math.floor(a.skin), 1, #Config.SkinTones)
+	end
+	if typeof(a.body) == "number" then
+		out.body = math.clamp(a.body, 0, 1)
+	end
+	if typeof(a.height) == "number" then
+		out.height = math.clamp(a.height, Config.Body.HeightMin, Config.Body.HeightMax)
+	end
+	if typeof(a.face) == "number" then
+		out.face = math.clamp(math.floor(a.face), 0, #Config.Faces)
+	end
+	if typeof(a.pose) == "number" then
+		out.pose = math.clamp(math.floor(a.pose), 1, #Config.Poses)
+	end
+	return out
+end
 
 -- ============================ helpers ============================
 
@@ -213,7 +251,7 @@ local function registerHandlers()
 		return EconomyService.purchase(player, itemId)
 	end)
 
-	Net.onServerEvent("SubmitOutfit", function(player: Player, raw: any)
+	Net.onServerEvent("SubmitOutfit", function(player: Player, raw: any, rawAppearance: any)
 		local r = round
 		if state ~= "STYLING" or not r or not r.participants[player] then
 			return
@@ -223,12 +261,14 @@ local function registerHandlers()
 			warn(`[GameLoop] rejected invalid outfit from {player.Name}`)
 			return
 		end
+		local appearance = validateAppearance(rawAppearance)
 		local existing = r.outfits[player]
 		if existing then
 			existing.outfit = clean -- keep original submit order on re-submit
+			existing.appearance = appearance
 		else
 			r.nextOrder += 1
-			r.outfits[player] = { outfit = clean, order = r.nextOrder }
+			r.outfits[player] = { outfit = clean, order = r.nextOrder, appearance = appearance }
 		end
 	end)
 
@@ -296,19 +336,26 @@ local function runRound()
 	end
 	round = r
 	setState("STYLING", Config.Round.StylingTime, { theme = theme, themeTags = themeTagList })
-	BotService.styleRound(theme, function(bot, outfit)
+	BotService.styleRound(theme, function(bot, outfit, appearance)
 		if round ~= r or state ~= "STYLING" then
 			return -- the round moved on while this bot dawdled
 		end
 		r.nextOrder += 1
-		r.outfits[bot] = { outfit = outfit, order = r.nextOrder }
+		r.outfits[bot] = { outfit = outfit, order = r.nextOrder, appearance = validateAppearance(appearance) }
 	end)
 	task.wait(Config.Round.StylingTime)
 
 	-- Build looks from entrants still in the round: humans still in the server
 	-- plus every bot. No submission → empty outfit (walks with score, no
 	-- elements, multiplier 1.0).
-	type Look = { id: string, player: Entrant, outfit: Outfit, order: number, elements: { ElementKey } }
+	type Look = {
+		id: string,
+		player: Entrant,
+		outfit: Outfit,
+		order: number,
+		elements: { ElementKey },
+		appearance: Appearance,
+	}
 	local looks: { Look } = {}
 	local lookIndex = 0
 	local humanLooks = 0
@@ -327,6 +374,7 @@ local function runRound()
 				outfit = outfit,
 				order = entry and entry.order or math.huge,
 				elements = ItemCatalog.elementsForOutfit(outfit),
+				appearance = entry and entry.appearance or defaultAppearance(),
 			})
 		end
 	end
@@ -372,6 +420,7 @@ local function runRound()
 			total = #looks,
 			summary = outfitSummary(look.outfit),
 			tags = tagsOf(look.elements),
+			appearance = look.appearance,
 		}
 		Net.fireAllExcept("RunwayLook", look.player :: Player, payload)
 		local ownPayload = table.clone(payload)
@@ -442,6 +491,7 @@ local function runRound()
 			userId = s.look.player.UserId,
 			score = math.floor(s.final * 100) / 100,
 			summary = outfitSummary(s.look.outfit),
+			appearance = s.look.appearance,
 		})
 	end
 

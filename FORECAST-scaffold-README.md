@@ -70,6 +70,10 @@ state-machine regressions in seconds, without opening Studio.
   dressed via `HumanoidDescription`, rotating/swaying/walking. It stars in styling (dress her
   live), struts each runway look, and poses the top-3 on the results podium. Body colors track
   the item you recolor; hair/clothes/accessories render once catalog items get real asset ids.
+- **Body customization** (the 💃 tab in styling): skin tone, height, body type, face and a
+  runway pose. Each field is a server-clamped `Types.Appearance` that travels with the look,
+  so everyone sees your body on the runway/podium. `face` is an **index into `Config.Faces`**
+  (never a raw client-supplied decal id); add free classic-face ids there to fill the picker.
 
 ## Curating free avatar assets (make items show their real 3D look)
 

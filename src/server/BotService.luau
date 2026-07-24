@@ -155,13 +155,31 @@ local function act(maxDelay: number, fn: () -> ())
 	end
 end
 
--- submit(bot, outfit) is provided by GameLoopService and guards that the round
--- is still in STYLING when a delayed bot finally decides.
-function BotService.styleRound(theme: string, submit: (bot: BotEntrant, outfit: Outfit) -> ())
+-- Each bot gets its own body too, so a runway of stylists looks varied.
+local function generateAppearance(): Types.Appearance
+	local face = 0
+	if #Config.Faces > 0 and math.random() < 0.6 then
+		face = math.random(1, #Config.Faces)
+	end
+	return {
+		skin = math.random(1, #Config.SkinTones),
+		body = math.random() * 0.85,
+		height = Config.Body.HeightMin + math.random() * (Config.Body.HeightMax - Config.Body.HeightMin),
+		face = face,
+		pose = math.random(1, #Config.Poses),
+	}
+end
+
+-- submit(bot, outfit, appearance) is provided by GameLoopService and guards that
+-- the round is still in STYLING when a delayed bot finally decides.
+function BotService.styleRound(
+	theme: string,
+	submit: (bot: BotEntrant, outfit: Outfit, appearance: Types.Appearance) -> ()
+)
 	local spread = Config.Round.StylingTime * Config.Bots.ActSpread
 	for _, bot in active do
 		act(spread, function()
-			submit(bot, generateOutfit(theme))
+			submit(bot, generateOutfit(theme), generateAppearance())
 		end)
 	end
 end
