@@ -89,9 +89,15 @@ layered clothing, hair, hat, accessory — so **you only need the number**, noth
 2. Add it to the `ASSET_IDS` map in `src/shared/ItemCatalog.luau`, keyed by item id:
    `top_crop_tee = 85096965320078,`
 
-Already wired (Lars's picks): `hair_bob` = Down-to-Earth Hair, `bot_cargo` = Cargo Pants Brown,
-`top_crop_tee` = Fire Shirt B. Equip those three together in styling to see the full effect.
-(The avatar APIs are Studio-only, so this can't be scripted from CI — hence the manual map.)
+Already wired: `hair_bob` = Down-to-Earth Hair, `hair_long_waves`, `bot_cargo` = Cargo Pants Brown,
+`bot_flare`, `top_crop_tee` = Fire Shirt B, `acc_shades` = glasses, `shoe_sneaker` = shoes.
+
+**Bulk harvest:** to fill the rest fast, run `tools/harvest-free-assets.luau` in a Studio Play
+session (paste it into the Command Bar) — it lists free catalog items with ids per slot, ready to
+paste into the `ASSET_IDS` map. The avatar APIs are Studio-only, so this can't run from CI.
+
+Custom items that aren't in the catalog (your own designs) mean real UGC work — 3D modeling plus a
+Robux-paid upload and moderation — done in Studio or by an artist, not scriptable here.
 
 ## Deliberate scaffold limitations (read before playtesting for real)
 
